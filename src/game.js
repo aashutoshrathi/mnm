@@ -569,9 +569,12 @@ async function requestWakeLock() {
   if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
     try {
       if (!wakeLock) {
-        wakeLock = await navigator.wakeLock.request('screen');
-        wakeLock.addEventListener('release', () => {
-          wakeLock = null;
+        const lock = await navigator.wakeLock.request('screen');
+        wakeLock = lock;
+        lock.addEventListener('release', () => {
+          if (wakeLock === lock) {
+            wakeLock = null;
+          }
         });
       }
     } catch (e) {
@@ -583,12 +586,13 @@ async function requestWakeLock() {
 
 function releaseWakeLock() {
   if (wakeLock) {
+    const lock = wakeLock;
+    wakeLock = null;
     try {
-      wakeLock.release().catch(() => {});
+      lock.release().catch(() => {});
     } catch (e) {
       /* no-op */
     }
-    wakeLock = null;
   }
 }
 
