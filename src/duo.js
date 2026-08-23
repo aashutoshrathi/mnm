@@ -186,19 +186,18 @@ function padStroke(a, b, color) {
   padCtx.lineTo(b.x + 0.01, b.y + 0.01);
   padCtx.stroke();
 
-  if (streamChannel && padCanvas) {
+  if (padCanvas) {
     const rect = padCanvas.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
-      try {
-        streamChannel.postMessage({
-          type: 'stroke',
-          from: padColorMode,
-          aNorm: { x: a.x / rect.width, y: a.y / rect.height },
-          bNorm: { x: b.x / rect.width, y: b.y / rect.height },
-          color,
-        });
-      } catch (err) {
-        /* channel post is best-effort */
+      const aNorm = { x: a.x / rect.width, y: a.y / rect.height };
+      const bNorm = { x: b.x / rect.width, y: b.y / rect.height };
+      if (typeof sendP2P === 'function') {
+        sendP2P('STROKE', { from: padColorMode, aNorm, bNorm, color });
+      }
+      if (streamChannel) {
+        try {
+          streamChannel.postMessage({ type: 'stroke', from: padColorMode, aNorm, bNorm, color });
+        } catch (err) {}
       }
     }
   }
@@ -218,6 +217,16 @@ function sideboardStroke(a, b, color) {
   sideboardCtx.stroke();
 }
 
+export function renderIncomingStroke(from, aNorm, bNorm, color) {
+  if (!sideboardCtx || !sideboardCanvas || from === padColorMode) {
+    return;
+  }
+  const rect = sideboardCanvas.getBoundingClientRect();
+  const sa = { x: aNorm.x * rect.width, y: aNorm.y * rect.height };
+  const sb = { x: bNorm.x * rect.width, y: bNorm.y * rect.height };
+  sideboardStroke(sa, sb, color);
+}
+
 function clearPad() {
   if (!padCtx || !padCanvas) {
     return;
@@ -226,16 +235,21 @@ function clearPad() {
   padCtx.clearRect(0, 0, rect.width, rect.height);
   drawDivider(rect.width, rect.height);
 
+  if (typeof sendP2P === 'function') {
+    sendP2P('CLEAR', { from: padColorMode });
+  }
+
   if (streamChannel) {
     try {
       streamChannel.postMessage({ type: 'clear', from: padColorMode });
-    } catch (err) {
-      /* best-effort */
-    }
+    } catch (err) {}
   }
 }
 
-function clearSideboard() {
+export function clearIncomingSideboard(from) {
+  if (from === padColorMode) {
+    return;
+  }
   if (!sideboardCtx || !sideboardCanvas) {
     return;
   }

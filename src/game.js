@@ -95,6 +95,7 @@ const S = {
 };
 
 const isGuest = () => S.mode === 'guest';
+const isHost = () => S.mode === 'host';
 const isSynced = () => S.mode !== 'solo';
 
 /* ================================================================ helpers */
@@ -424,10 +425,97 @@ function startNewGame() {
   toHandoff();
 }
 
-/* ================================================================ invite */
+/* ================================================================ invite & p2p */
+
+function handleP2PMessage(msg) {
+  if (!msg || !msg.type) return;
+
+  switch (msg.type) {
+    case 'PEER_PING':
+    case 'PEER_JOINED':
+      if (isHost()) {
+        const teamName = msg.name || S.teams[1].name || 'Team 2';
+        toast(`${teamName} connected to the room!`);
+        blip(880, 0.1);
+      }
+      break;
+
+    case 'START_ROUND':
+      if (isGuest()) {
+        if (S.round !== msg.round) S.round = msg.round;
+        startGuestRound();
+        if (msg.endsAt) {
+          S.endsAt = msg.endsAt;
+          runClock();
+        }
+      }
+      break;
+
+    case 'STROKE':
+      renderIncomingStroke(msg.from, msg.aNorm, msg.bNorm, msg.color);
+      break;
+
+    case 'CLEAR':
+      clearIncomingSideboard(msg.from);
+      break;
+
+    case 'SCORE':
+      if (isGuest()) {
+        stopClock();
+        if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
+        if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        if (msg.winner === null) {
+          $('res-eyebrow').textContent = `Round ${msg.round}`;
+          $('verdict').textContent = 'Nobody got it';
+          $('verdict').style.color = 'rgba(247,244,236,.35)';
+        } else {
+          $('res-eyebrow').textContent = `${S.teams[msg.winner].name} got there first`;
+          $('verdict').textContent = `+${msg.pts}`;
+          $('verdict').style.color = S.teams[msg.winner].color;
+        }
+        $('res-word').textContent = (S.card && S.card.word) || '';
+        renderBoard($('board2'));
+        show('s-result');
+      }
+      break;
+
+    case 'NEXT_ROUND':
+      if (isGuest()) {
+        S.round = msg.round;
+        saveLastJoin();
+        toGuestReady();
+      }
+      break;
+
+    case 'RENAME_TEAM':
+      if (msg.teamIndex !== undefined && msg.name) {
+        S.teams[msg.teamIndex].name = msg.name;
+        renderBoard($('board'));
+        renderBoard($('board2'));
+        renderBoard($('board3'));
+        const teamNameEl = $('guest-team-name');
+        if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
+        toast(`${msg.name} updated their team name`);
+      }
+      break;
+
+    case 'END_GAME':
+      if (isGuest()) {
+        stopClock();
+        if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
+        if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        endGame(S.teams[msg.champIndex] || leader(), msg.reason);
+      }
+      break;
+  }
+}
 
 function showInvite() {
   $('invite-code').textContent = formatJoinCode(S.code);
+
+  if (isHost() && S.code && typeof connectP2P === 'function') {
+    connectP2P({ code: S.code, role: 'host', onMessage: handleP2PMessage });
+  }
 
   const url = joinUrl(S.code);
   const shareable = /^https?:$/.test(window.location.protocol);
@@ -437,7 +525,7 @@ function showInvite() {
     try {
       holder.innerHTML = qrToSVG(encodeQR(url, { level: 'M' }), { scale: 6, quiet: 3 });
       $('invite-url').textContent = url;
-      $('invite-qr-note').textContent = 'Point any camera at this - it opens the game already joined.';
+      $('invite-qr-note').textContent = 'Point any camera at this: it opens the game already joined.';
     } catch (err) {
       holder.innerHTML = '';
       $('invite-url').textContent = '';
@@ -714,6 +802,10 @@ function startRound(card) {
   S.pausedMs = null;
   show('s-draw');
   runClock();
+
+  if (isHost() && typeof sendP2P === 'function') {
+    sendP2P('START_ROUND', { round: S.round, endsAt: S.endsAt, len: S.len });
+  }
 }
 
 /**
@@ -754,6 +846,17 @@ function finishRound(winner) {
   renderBoard($('board2'));
   persist();
 
+  if (isHost() && typeof sendP2P === 'function') {
+    sendP2P('SCORE', {
+      winner,
+      pts,
+      round: S.round,
+      team0Score: S.teams[0].score,
+      team1Score: S.teams[1].score,
+      history: S.history,
+    });
+  }
+
   if (winner !== null && S.target && S.teams[winner].score >= S.target) {
     return endGame(S.teams[winner], `First to ${S.target}.`);
   }
@@ -774,6 +877,10 @@ function nextRound() {
   S.round++;
   persist();
   toHandoff();
+
+  if (isHost() && typeof sendP2P === 'function') {
+    sendP2P('NEXT_ROUND', { round: S.round });
+  }
 }
 
 function endGame(champ, reason) {
@@ -792,6 +899,15 @@ function endGame(champ, reason) {
   renderLog();
   show('s-win');
   [0, 120, 240].forEach((d, i) => setTimeout(() => blip(660 + i * 220, 0.14, 0.06), d));
+
+  if (isHost() && typeof sendP2P === 'function') {
+    sendP2P('END_GAME', {
+      champIndex: S.teams.indexOf(champ),
+      reason: S.endReason,
+      team0Score: S.teams[0].score,
+      team1Score: S.teams[1].score,
+    });
+  }
 }
 
 function renderLog() {
@@ -910,6 +1026,7 @@ async function leaveGame() {
   });
   if (!ok) return;
   stopClock();
+  if (typeof disconnectP2P === 'function') disconnectP2P();
   S.mode = 'solo';
   S.seed = null;
   S.code = null;
@@ -982,6 +1099,10 @@ async function enterGuestMode(code, payload, round, playSound = true) {
   applyMode();
   await saveLastJoin();
   if (playSound) blip(760, 0.09);
+  if (typeof connectP2P === 'function') {
+    connectP2P({ code: S.code, role: 'guest', onMessage: handleP2PMessage });
+    sendP2P('PEER_JOINED', { name: S.teams[1].name });
+  }
   toGuestReady();
   toast(`Joined ${formatJoinCode(code)}. Review and edit your team name below if you want to.`);
 }
@@ -1223,6 +1344,9 @@ function wireEvents() {
       const teamNameEl = $('guest-team-name');
       if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
       $('guest-renamer').hidden = true;
+      if (typeof sendP2P === 'function') {
+        sendP2P('RENAME_TEAM', { teamIndex: 1, name: S.teams[1].name });
+      }
       toast(`Team name set to ${S.teams[1].name}`);
     };
   }
@@ -1285,6 +1409,10 @@ function wireEvents() {
     $('rename-toggle').textContent = 'Rename teams';
     persist();
     toHandoff();
+    if (typeof sendP2P === 'function') {
+      sendP2P('RENAME_TEAM', { teamIndex: 0, name: S.teams[0].name });
+      sendP2P('RENAME_TEAM', { teamIndex: 1, name: S.teams[1].name });
+    }
     toast('Names updated');
   };
 
