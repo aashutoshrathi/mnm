@@ -1,5 +1,5 @@
 /**
- * storage.js — saved games.
+ * storage.js - saved games.
  *
  * The app talks to an adapter, never to a storage API directly, because the
  * available API depends on where this is running. Two adapters ship here; a

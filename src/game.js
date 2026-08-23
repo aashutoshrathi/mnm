@@ -1,5 +1,5 @@
 /**
- * game.js — state machine and UI wiring.
+ * game.js - state machine and UI wiring.
  *
  * Three modes share one screen graph:
  *
@@ -32,6 +32,7 @@ import {
 } from './joincode.js';
 import { encodeQR, qrToSVG } from './qr.js';
 import { startScanner, scanAvailable } from './scan.js';
+import { wireDuoPad, openDuoPad, closeDuoPad } from './duo.js';
 
 /* ============================================================== constants */
 
@@ -261,7 +262,7 @@ async function renderSaves() {
         (b.onclick = async () => {
           const ok = await confirmSheet({
             title: 'Delete this game?',
-            body: `"${b.dataset.label}" goes for good — scores, round history and its used-word list. This can't be undone.`,
+            body: `"${b.dataset.label}" goes for good - scores, round history and its used-word list. This can't be undone.`,
             yes: 'Delete it',
             no: 'Keep it',
           });
@@ -407,7 +408,7 @@ function showInvite() {
     try {
       holder.innerHTML = qrToSVG(encodeQR(url, { level: 'M' }), { scale: 6, quiet: 3 });
       $('invite-url').textContent = url;
-      $('invite-qr-note').textContent = 'Point any camera at this — it opens the game already joined.';
+      $('invite-qr-note').textContent = 'Point any camera at this - it opens the game already joined.';
     } catch (err) {
       holder.innerHTML = '';
       $('invite-url').textContent = '';
@@ -443,7 +444,7 @@ function toHandoff() {
     $('handoff-head').textContent = 'Both drawers, huddle up';
     $('handoff-sub').textContent =
       'One drawer from each team looks at the screen together. Everyone else: eyes off.';
-    $('reveal').textContent = "We're the drawers — deal us in";
+    $('reveal').textContent = "We're the drawers - deal us in";
     $('sync-badge').hidden = true;
   }
 
@@ -501,13 +502,15 @@ function generatedWord(tier) {
       return w;
     }
   }
-  return mashupWord(4);
+  const w = mashupWord(4);
+  S.used.add(w);
+  return w;
 }
 
 /**
  * Solo-mode draw. Cascades outward when a pool runs dry: requested tier, other
  * tiers in the theme, any other theme, then generated mashups, which never run
- * out — so "no repeats" always holds.
+ * out - so "no repeats" always holds.
  */
 function drawWord(theme, tier) {
   const source = theme.any ? pick(ALL_THEMES) : theme;
@@ -530,7 +533,7 @@ function drawWord(theme, tier) {
 }
 
 function dealCards() {
-  $('pick-who').textContent = `${S.theme.name} — both teams draw it`;
+  $('pick-who').textContent = `${S.theme.name} - both teams draw it`;
   S.cards = tiersForRound().map((tier, i) => ({ tier, pts: i + 1, word: drawWord(S.theme, tier) }));
 
   $('cards').innerHTML = S.cards
@@ -551,7 +554,7 @@ function dealCards() {
     .forEach((b) => (b.onclick = () => startRound(S.cards[Number(b.dataset.i)])));
 }
 
-/** Synced mode skips the picking entirely — the round deals itself. */
+/** Synced mode skips the picking entirely - the round deals itself. */
 function dealSyncedRound() {
   const r = roundFor(S.seed, S.diff, S.round);
   S.theme = r.theme;
@@ -571,6 +574,13 @@ function paintClock() {
   el.className = 'clock' + (left <= 5 ? ' hot shake' : left <= 10 ? ' hot' : left <= 20 ? ' warn' : '');
   $('stroke').style.transform = `scaleX(${ms / (S.len * 1000)})`;
   $('stroke').style.background = left <= 10 ? '#FF4262' : left <= 20 ? '#FFD23F' : '#F7F4EC';
+
+  const padClock = $('pad-clock');
+  if (padClock) {
+    padClock.textContent = formatClock(left);
+    padClock.style.color =
+      left <= 10 ? '#FF4262' : left <= 20 ? '#FFD23F' : 'var(--paper)';
+  }
 
   return left;
 }
@@ -606,6 +616,7 @@ function stopClock() {
   clearInterval(S.ticker);
   S.ticker = null;
   S.pausedMs = null;
+  closeDuoPad();
 }
 
 function pauseClock() {
@@ -686,6 +697,9 @@ function finishRound(winner) {
 }
 
 function nextRound() {
+  if (!$('s-result').classList.contains('is-active')) {
+    return;
+  }
   if (S.rounds && S.round >= S.rounds) {
     return endGame(leader(), `All ${S.rounds} rounds played.`);
   }
@@ -726,7 +740,7 @@ function renderLog() {
         <div class="logrow">
           <span class="lw">${esc(h.w)} <span class="dim">· ${esc(h.t)}</span></span>
           <span style="font-size:12px">${who}</span>
-          <span class="lp">${h.win === null ? '—' : '+' + h.p}</span>
+          <span class="lp">${h.win === null ? '-' : '+' + h.p}</span>
         </div>`;
     })
     .join('');
@@ -743,7 +757,7 @@ async function wrapUp() {
   const [a, b] = S.teams;
   const standing =
     a.score === b.score
-      ? `Level at ${a.score} each — a tie is a legitimate result.`
+      ? `Level at ${a.score} each - a tie is a legitimate result.`
       : `${leader().name} leads ${Math.max(a.score, b.score)}–${Math.min(a.score, b.score)}.`;
 
   const ok = await confirmSheet({
@@ -951,9 +965,13 @@ async function openShare() {
 
   $('sh-share').onclick = async () => {
     const result = await exportCard(canvas, `marker-mayhem-${Date.now()}.png`);
-    if (result === 'shared') toast('Shared');
-    else if (result === 'downloaded') toast('Image saved');
-    else toast('Long-press the image to save it');
+    if (result === 'shared') {
+      toast('Shared');
+    } else if (result === 'downloaded') {
+      toast('Image saved');
+    } else if (result !== 'cancelled') {
+      toast('Long-press the image to save it');
+    }
   };
 }
 
@@ -980,6 +998,9 @@ function wireEvents() {
   $('veil').onclick = () => $('veil').classList.remove('on');
 
   const peek = $('peek');
+  peek.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
   peek.addEventListener('pointerdown', (e) => {
     if (S.pinned) return;
     e.preventDefault();
@@ -998,6 +1019,9 @@ function wireEvents() {
 
   [0, 1].forEach((i) => {
     $(`got${i}`).onclick = () => {
+      if (!S.ticker) {
+        return; // this round is already decided
+      }
       stopClock();
       buzz(40);
       blip(880, 0.1);
@@ -1006,6 +1030,9 @@ function wireEvents() {
     };
   });
   $('giveup').onclick = () => {
+    if (!S.ticker) {
+      return;
+    }
     stopClock();
     finishRound(null);
   };
@@ -1019,6 +1046,16 @@ function wireEvents() {
   $('share').onclick = openShare;
   $('sh-close').onclick = closeShare;
   $('share-modal').onclick = (e) => e.target === $('share-modal') && closeShare();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('share-modal').classList.contains('on')) {
+      closeShare();
+    }
+  });
+
+  $('duo-toggle').onclick = () => {
+    blip(500, 0.06);
+    openDuoPad();
+  };
 
   $('invite-done').onclick = () => toHandoff();
   $('invite-copy').onclick = async () => {
@@ -1027,7 +1064,7 @@ function wireEvents() {
       await navigator.clipboard.writeText(text);
       toast('Copied');
     } catch (e) {
-      toast('Copy not available — read it out instead');
+      toast('Copy not available - read it out instead');
     }
   };
   $('show-invite').onclick = showInvite;
@@ -1053,7 +1090,8 @@ function wireEvents() {
     await persist();
     await renderSaves();
     show('s-setup');
-    toast(store.durable ? 'Saved — resume any time' : 'Saved for this session');
+    const durable = store.name === 'host' || store.name === 'localStorage';
+    toast(durable ? 'Saved - resume any time' : 'Saved for this session');
   };
 
   $('again').onclick = () => {
@@ -1145,6 +1183,7 @@ function registerServiceWorker() {
   initSetup();
   wireEvents();
   wireButtonHaptics();
+  wireDuoPad({ getWord: () => (S.card ? S.card.word : '') });
   syncFeedbackLabels();
   applyMode();
   registerServiceWorker();

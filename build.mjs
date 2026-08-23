@@ -1,5 +1,5 @@
 /**
- * build.mjs — bundles the app into a single self-contained HTML file.
+ * build.mjs - bundles the app into a single self-contained HTML file.
  *
  *   node build.mjs
  *
@@ -8,7 +8,7 @@
  * other case: one file you can email, drop on a USB stick, or open straight
  * off the filesystem with no server at all.
  *
- * The bundling is deliberately naive — strip import lines, strip the `export`
+ * The bundling is deliberately naive - strip import lines, strip the `export`
  * keyword, concatenate in dependency order, wrap in an IIFE. That is enough
  * for a project this size and keeps the toolchain at zero dependencies.
  */
@@ -23,6 +23,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const MODULES = [
   'rng.js',
   'feedback.js',
+  'duo.js',
   'tally.js',
   'storage.js',
   'storage-web.js',
@@ -49,14 +50,14 @@ const DEFAULT_EXPORT = /^export\s+default\b/m;
  */
 function assertBundlable(name, src) {
   if (NAMESPACE_IMPORT.test(src)) {
-    throw new Error(`${name}: "import * as" cannot be flattened — use named imports`);
+    throw new Error(`${name}: "import * as" cannot be flattened - use named imports`);
   }
   if (DEFAULT_EXPORT.test(src)) {
-    throw new Error(`${name}: default exports cannot be flattened — use a named export`);
+    throw new Error(`${name}: default exports cannot be flattened - use a named export`);
   }
   for (const stmt of src.match(IMPORT_STATEMENT) || []) {
     if (ALIASED_IMPORT.test(stmt)) {
-      throw new Error(`${name}: aliased import cannot be flattened — rename at the source`);
+      throw new Error(`${name}: aliased import cannot be flattened - rename at the source`);
     }
   }
 }
@@ -128,7 +129,7 @@ async function build() {
 
   await mkdir(join(root, 'dist'), { recursive: true });
   await writeFile(join(root, 'dist', 'index.html'), out);
-  console.log(`dist/index.html — ${(out.length / 1024).toFixed(1)} KB`);
+  console.log(`dist/index.html - ${(out.length / 1024).toFixed(1)} KB`);
 }
 
 build().catch((err) => {

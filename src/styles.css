@@ -241,7 +241,6 @@ input[type=text]:focus { border-color: rgba(247,244,236,.4); outline: none; }
 .drawfoot { display: flex; flex-direction: column; gap: 10px; }
 
 /* ----------------------------------------------------------------- result */
-
 .verdict { font-family: var(--display); font-size: clamp(42px, 14vw, 64px);
   font-weight: 800; letter-spacing: -.04em; line-height: .94; }
 .answer { display: inline-block; align-self: center;
@@ -344,3 +343,41 @@ body.mode-guest #wrap-draw,
 body.mode-guest .drawfoot > .eyebrow { display: none; }
 body.mode-guest #guest-done { display: flex; }
 body:not(.mode-synced) #show-invite { display: none; }
+
+/* ============================================================================
+   Duo pad - one phone, two artists
+   ========================================================================= */
+
+#duo-toggle { display: inline-block; }
+body.mode-guest #duo-toggle { display: none; }
+
+.padwrap { position: fixed; inset: 0; z-index: 35;
+  background: var(--ink);
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom)); }
+.padwrap[hidden] { display: none; }
+
+.padbar { display: flex; align-items: center; gap: 14px; }
+.padclock { font-family: var(--display); font-weight: 800;
+  font-size: 32px; line-height: 1; letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums; min-width: 84px;
+  transition: color .3s ease; }
+.padword { flex: 1; align-self: auto; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.padtools { display: flex; gap: 14px; flex: none; }
+
+.padstage { position: relative; flex: 1; border-radius: 20px;
+  border: 1.5px solid rgba(247,244,236,.1); overflow: hidden;
+  background-color: var(--ink-2);
+  background-image:
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+  background-size: 26px 26px; }
+.padstage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+
+.zlabel { position: absolute; left: 0; right: 0; text-align: center;
+  pointer-events: none; user-select: none; -webkit-user-select: none;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: rgba(247,244,236,.22); }
+.zlabel--top { top: 12px; color: rgba(255,66,98,.4); }
+.zlabel--bottom { bottom: 12px; color: rgba(61,155,255,.4); }

@@ -1,5 +1,5 @@
 /**
- * sw.js — offline shell.
+ * sw.js - offline shell.
  *
  * Multi-device play is meant for places with no signal, which means a guest
  * following the invite QR must be able to load the app with the network down.
@@ -9,7 +9,7 @@
  * Bump CACHE when shipping. Old caches are dropped on activate.
  */
 
-const CACHE = 'marker-mayhem-v2';
+const CACHE = 'marker-mayhem-v3';
 
 const SHELL = [
   './',
@@ -22,6 +22,7 @@ const SHELL = [
   './src/words.js',
   './src/tally.js',
   './src/feedback.js',
+  './src/duo.js',
   './src/storage.js',
   './src/storage-web.js',
   './src/share.js',

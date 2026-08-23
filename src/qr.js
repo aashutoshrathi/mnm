@@ -1,5 +1,5 @@
 /**
- * qr.js — a QR encoder, byte mode, versions 1-10, EC levels L and M.
+ * qr.js - a QR encoder, byte mode, versions 1-10, EC levels L and M.
  *
  * Written out rather than pulled in because the whole point of the offline
  * mode is that it works with no network, and a CDN script tag would be a lie.

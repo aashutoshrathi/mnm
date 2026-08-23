@@ -1,5 +1,5 @@
 /**
- * test/dom.mjs — drives the built bundle in jsdom.
+ * test/dom.mjs - drives the built bundle in jsdom.
  *
  *   node build.mjs && node test/dom.mjs
  *
@@ -359,6 +359,45 @@ await test('a guest advancing lands on the next round', async () => {
   assert.match($(guest, 'guest-round').textContent, /Round 2/);
   click(guest, 'guest-start');
   assert.notEqual($(guest, 'peek').textContent, first);
+
+  host.window.close();
+  guest.window.close();
+});
+
+await test('the duo pad opens over the draw screen and closes', async () => {
+  const dom = await boot();
+  click(dom, 'go');
+  click(dom, 'reveal');
+  $(dom, 'themes').querySelector('.theme').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  $(dom, 'cards').querySelector('.card').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  assert.equal(active(dom), 's-draw');
+
+  click(dom, 'duo-toggle');
+  assert.ok(!$(dom, 'duo-pad').hidden, 'pad should be visible');
+  assert.equal($(dom, 'pad-clock').textContent, $(dom, 'clock').textContent, 'pad mirrors the clock');
+  assert.match($(dom, 'pad-word').textContent, /Hold for the word/);
+
+  click(dom, 'pad-clear');
+  click(dom, 'pad-done');
+  assert.ok($(dom, 'duo-pad').hidden, 'Done should close the pad');
+
+  click(dom, 'got0');
+  assert.equal(active(dom), 's-result', 'round still scores normally after pad use');
+  dom.window.close();
+});
+
+await test('guests never see the duo pad toggle', async () => {
+  const host = await boot();
+  pickSegment(host, 'seg-devices', 'host');
+  click(host, 'go');
+  const url = $(host, 'invite-url').textContent;
+
+  const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  const styles = guest.window.getComputedStyle($(guest, 'duo-toggle'));
+  assert.ok(
+    !visible(guest, 'duo-toggle') || styles.display === 'none',
+    'the toggle should be hidden for guests'
+  );
 
   host.window.close();
   guest.window.close();

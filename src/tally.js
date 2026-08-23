@@ -1,5 +1,5 @@
 /**
- * tally.js — the scoreboard is kept in hand-struck tally marks.
+ * tally.js - the scoreboard is kept in hand-struck tally marks.
  *
  * Geometry lives here once and is consumed twice: as SVG paths on screen and
  * as canvas strokes on the shareable card. Both must look identical, so

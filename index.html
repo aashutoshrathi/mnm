@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Marker &amp; Mayhem — a Pictionary host for one phone</title>
+<title>Marker &amp; Mayhem - a Pictionary host for one phone</title>
 <meta name="description" content="A Pictionary referee for one phone. Both teams draw the same word at the same time. Keeps the clock, keeps the tally, and never shows the word to the guessers.">
 <meta name="theme-color" content="#12142A">
 <meta name="color-scheme" content="dark">
@@ -165,7 +165,7 @@
     </div>
 
     <div class="stack">
-      <button class="btn" id="reveal" data-haptic="20">We're the drawers — deal us in</button>
+      <button class="btn" id="reveal" data-haptic="20">We're the drawers - deal us in</button>
       <button class="btn btn--ghost btn--sm" id="pause">Pause and save for later</button>
       <div style="text-align:center"><button class="linkbtn" id="show-invite">Show the join code again</button></div>
     </div>
@@ -180,14 +180,14 @@
         <button class="linkbtn" id="wrap-theme">Wrap up</button>
       </div>
     </div>
-    <p class="sub" style="margin-bottom:16px">Pick a theme. Everyone gets told which one you chose — just not the word.</p>
+    <p class="sub" style="margin-bottom:16px">Pick a theme. Everyone gets told which one you chose - just not the word.</p>
     <div class="themes" id="themes"></div>
   </section>
 
   <!-- ==================== PICK ==================== -->
   <section class="screen" id="s-pick">
     <div class="topbar">
-      <p class="eyebrow" id="pick-who">Animals — both teams draw it</p>
+      <p class="eyebrow" id="pick-who">Animals - both teams draw it</p>
       <div class="linkrow">
         <button class="linkbtn" id="panic2">Hide</button>
         <button class="linkbtn" id="wrap-pick">Wrap up</button>
@@ -218,6 +218,7 @@
       <button class="btn btn--blue" id="got1" data-haptic="34">Blue got it</button>
       <button class="btn btn--ghost btn--sm" id="giveup">Nobody got it</button>
       <button class="btn btn--yellow" id="guest-done">Round over</button>
+      <div style="text-align:center"><button class="linkbtn" id="duo-toggle">No paper? Draw it right here</button></div>
       <div style="text-align:center"><button class="linkbtn" id="wrap-draw">Wrap up game</button></div>
     </div>
   </section>
@@ -242,10 +243,10 @@
       <span class="eyebrow">How the other phones join</span>
       <button class="info" aria-expanded="false" aria-label="About joining">i</button>
     </div>
-    <p class="hint">Fastest: point the built-in camera app at the code — it opens the game already joined. Otherwise open this same page on the other phone, tap "Join a game on this phone" and type the eight characters. Nothing is sent anywhere; both phones just derive the same rounds from the same number.</p>
+    <p class="hint">Fastest: point the built-in camera app at the code - it opens the game already joined. Otherwise open this same page on the other phone, tap "Join a game on this phone" and type the eight characters. Nothing is sent anywhere; both phones just derive the same rounds from the same number.</p>
 
     <div class="stack mt">
-      <button class="btn btn--yellow" id="invite-done" data-haptic="20">Everyone's in — play</button>
+      <button class="btn btn--yellow" id="invite-done" data-haptic="20">Everyone's in - play</button>
     </div>
   </section>
 
@@ -342,6 +343,23 @@
   <p class="eyebrow">Screen hidden</p>
   <h2>Nothing to see</h2>
   <p class="sub">Tap anywhere when it's just the drawers looking.</p>
+</div>
+
+<!-- ==================== DUO PAD (shared drawing surface) ==================== -->
+<div class="padwrap" id="duo-pad" hidden>
+  <div class="padbar">
+    <span class="padclock" id="pad-clock">1:30</span>
+    <button class="peek padword" id="pad-word">Hold for the word</button>
+    <span class="padtools">
+      <button class="linkbtn" id="pad-clear">Clear</button>
+      <button class="linkbtn" id="pad-done">Done</button>
+    </span>
+  </div>
+  <div class="padstage">
+    <canvas id="pad-canvas"></canvas>
+    <span class="zlabel zlabel--top">Red draws up here</span>
+    <span class="zlabel zlabel--bottom">Blue draws down here</span>
+  </div>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

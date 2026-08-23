@@ -1,8 +1,8 @@
 /**
- * sync.js — deriving rounds that every device agrees on.
+ * sync.js - deriving rounds that every device agrees on.
  *
  * The rule that makes this work: a round is a pure function of (seed, round
- * number, difficulty). Nothing about *this* device may leak into it — not how
+ * number, difficulty). Nothing about *this* device may leak into it - not how
  * many words it has drawn, not when it joined, not which themes anyone picked.
  * A phone that joins at round 7 must compute round 7 exactly as the host did.
  *
@@ -12,7 +12,7 @@
  * history and lands in the same place. Replay is memoised, so the cost is one
  * derivation per round, not N.
  *
- * The trade is that nobody picks the theme or the card — the round deals
+ * The trade is that nobody picks the theme or the card - the round deals
  * itself. For all-play that is arguably fairer anyway: neither team gets to
  * choose the stakes.
  */
@@ -37,10 +37,16 @@ const SYNC_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 /** Per (seed, difficulty) replay state, so we never redo work. */
 const replays = new Map();
 
+/** Cap on memoised replays, so a long session can't grow the map forever. */
+const MAX_REPLAYS = 8;
+
 function replayFor(seed, diff) {
   const key = `${seed}:${diff}`;
   let state = replays.get(key);
   if (!state) {
+    if (replays.size >= MAX_REPLAYS) {
+      replays.delete(replays.keys().next().value);
+    }
     state = { rounds: [], used: new Set() };
     replays.set(key, state);
   }

@@ -1,5 +1,5 @@
 /**
- * share.js — turns the final scoreboard into a PNG worth posting.
+ * share.js - turns the final scoreboard into a PNG worth posting.
  *
  * Drawn by hand on a canvas rather than screenshotting the DOM, which keeps
  * the repo dependency-free and gives a composition that suits a phone screen
@@ -171,7 +171,7 @@ export function renderShareCard(game) {
       ctx.fillText(truncate(ctx, h.w, W - PAD * 2 - 260), PAD, y);
 
       const tag = h.win === null ? 'nobody' : game.teams[h.win].name;
-      const pts = h.win === null ? '—' : `+${h.p}`;
+      const pts = h.win === null ? '-' : `+${h.p}`;
       ctx.font = display(27);
       ctx.fillStyle = h.win === null ? 'rgba(247,244,236,0.3)' : game.teams[h.win].color;
       ctx.fillText(pts, W - PAD - ctx.measureText(pts).width, y);
@@ -183,7 +183,7 @@ export function renderShareCard(game) {
 
   ctx.fillStyle = 'rgba(247,244,236,0.28)';
   ctx.font = body(21);
-  ctx.fillText('Marker & Mayhem — one word, both teams, 90 seconds', PAD, H - 58);
+  ctx.fillText('Marker & Mayhem - one word, both teams, 90 seconds', PAD, H - 58);
 
   return canvas;
 }
@@ -196,19 +196,23 @@ function canvasToBlob(canvas) {
  * Try the nicest available export. Falls through gracefully: native share
  * sheet, then a file download, then nothing (the caller always shows the
  * image inline, so long-press-to-save still works).
- * @returns {Promise<'shared'|'downloaded'|'preview'>}
+ * @returns {Promise<'shared'|'downloaded'|'cancelled'|'preview'>}
  */
 export async function exportCard(canvas, filename = 'marker-and-mayhem.png') {
   const blob = await canvasToBlob(canvas);
-  if (!blob) return 'preview';
+  if (!blob) {
+    return 'preview';
+  }
 
   const file = new File([blob], filename, { type: 'image/png' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'Marker & Mayhem — final tally' });
+      await navigator.share({ files: [file], title: 'Marker & Mayhem - final tally' });
       return 'shared';
     } catch (e) {
-      if (e && e.name === 'AbortError') return 'shared';
+      if (e && e.name === 'AbortError') {
+        return 'cancelled';
+      }
     }
   }
 

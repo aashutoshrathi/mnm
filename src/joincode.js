@@ -1,9 +1,9 @@
 /**
- * joincode.js — the thing that crosses the air gap.
+ * joincode.js - the thing that crosses the air gap.
  *
  * Everything a second phone needs to compute the same rounds as the host packs
  * into 40 bits: a 24-bit seed, 8 bits of settings, and an 8-bit checksum. That
- * renders as 8 Crockford base32 characters — "K7M3QP2X" — short enough to read
+ * renders as 8 Crockford base32 characters - "K7M3QP2X" - short enough to read
  * aloud across a room and short enough to keep the QR at a low version.
  *
  * The checksum is not decoration. Without it a mistyped character produces a
@@ -21,7 +21,7 @@ export const JOIN_CODE_LENGTH = 8;
 
 /**
  * Settings that must match for two devices to derive identical rounds.
- * Order is part of the wire format — append only, never reorder.
+ * Order is part of the wire format - append only, never reorder.
  */
 const DIFFICULTIES = ['easy', 'medium', 'hard', 'mixed'];
 const LENGTHS = [60, 90, 120, 180];
@@ -141,7 +141,7 @@ export function decodeJoinCode(input) {
 
   const bytes = fromBase32(cleaned);
   if (crc8(bytes) !== 0) {
-    throw new RangeError("That code doesn't check out — one character is probably off");
+    throw new RangeError("That code doesn't check out - one character is probably off");
   }
 
   const body = bytes.slice(0, 4);
