@@ -381,3 +381,38 @@ body.mode-guest #duo-toggle { display: none; }
   color: rgba(247,244,236,.22); }
 .zlabel--top { top: 12px; color: rgba(255,66,98,.4); }
 .zlabel--bottom { bottom: 12px; color: rgba(61,155,255,.4); }
+
+/* ============================================================================
+   Responsive layout: small phones (<=360px), tablets / iPads (>=768px)
+   ========================================================================= */
+
+@media (max-width: 360px) {
+  #app { padding: 16px 14px calc(22px + env(safe-area-inset-bottom)); }
+  .seg button { font-size: 12px; padding: 11px 2px; }
+  .btn { padding: 16px 14px; font-size: 17px; }
+  .card { padding: 16px 14px; gap: 12px; }
+  .word { font-size: 20px; }
+  .pts { width: 40px; height: 40px; font-size: 20px; }
+}
+
+@media (min-width: 768px) {
+  #app {
+    max-width: 620px;
+    padding: 36px 28px calc(36px + env(safe-area-inset-bottom));
+  }
+  .sheet { max-width: 480px; padding: 32px 28px 24px; }
+  .padwrap { padding: 24px 28px calc(24px + env(safe-area-inset-bottom)); }
+  .padbar { gap: 20px; }
+  .padclock { font-size: 38px; }
+}
+
+@supports (padding: env(safe-area-inset-left)) {
+  #app {
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+  .padwrap {
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
+  }
+}
