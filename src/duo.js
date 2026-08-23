@@ -64,9 +64,9 @@ function drawDivider(width, height) {
 }
 
 /**
- * Match the backing store to the element at device resolution. A size change
- * clears the sheet - rotation costs you your masterpiece, which is at least in
- * the spirit of the game.
+ * Match the backing store to the element at device resolution.
+ * Preserves the existing artwork across small viewport shifts (e.g. browser
+ * address bar collapsing on scroll).
  */
 function padLayout() {
   if (!padCtx || !padCanvas) {
@@ -76,13 +76,35 @@ function padLayout() {
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(1, Math.round(rect.width * dpr));
   const h = Math.max(1, Math.round(rect.height * dpr));
-  if (padCanvas.width !== w || padCanvas.height !== h) {
-    padCanvas.width = w;
-    padCanvas.height = h;
+  if (padCanvas.width === w && padCanvas.height === h) {
+    return;
   }
+
+  const oldW = padCanvas.width;
+  const oldH = padCanvas.height;
+  let backup = null;
+  if (oldW > 0 && oldH > 0) {
+    backup = document.createElement('canvas');
+    backup.width = oldW;
+    backup.height = oldH;
+    const bCtx = backup.getContext('2d');
+    if (bCtx) {
+      bCtx.drawImage(padCanvas, 0, 0);
+    }
+  }
+
+  padCanvas.width = w;
+  padCanvas.height = h;
   padCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   padCtx.clearRect(0, 0, rect.width, rect.height);
   drawDivider(rect.width, rect.height);
+
+  if (backup) {
+    padCtx.save();
+    padCtx.setTransform(1, 0, 0, 1, 0, 0);
+    padCtx.drawImage(backup, 0, 0, w, h);
+    padCtx.restore();
+  }
 }
 
 function padStroke(a, b, color) {
@@ -175,7 +197,7 @@ export function wireDuoPad({ getWord = () => '' } = {}) {
     last.y = p.y;
   });
 
-  ['pointerup', 'pointercancel'].forEach((ev) => {
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => {
     padCanvas.addEventListener(ev, (e) => {
       padPointers.delete(e.pointerId);
     });
