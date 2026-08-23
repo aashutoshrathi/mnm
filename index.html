@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Marker &amp; Mayhem — a Pictionary host for one phone</title>
+<meta name="description" content="A Pictionary referee for one phone. Both teams draw the same word at the same time. Keeps the clock, keeps the tally, and never shows the word to the guessers.">
+<meta name="theme-color" content="#12142A">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Marker &amp; Mayhem">
+<meta property="og:description" content="One word, both teams drawing at once, 90 seconds. A Pictionary host that runs the whole game from one phone.">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 36'%3E%3Crect width='38' height='36' fill='%2312142A'/%3E%3Cg stroke='%23FFD23F' stroke-width='3.2' stroke-linecap='round' fill='none'%3E%3Cpath d='M5 4L5 32'/%3E%3Cpath d='M13.5 4L13.5 32'/%3E%3Cpath d='M22 4L22 32'/%3E%3Cpath d='M30.5 4L30.5 32'/%3E%3Cpath d='M1 30Q17 18 34 6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Space+Grotesk:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== SETUP ==================== -->
+  <section class="screen is-active" id="s-setup">
+    <header style="padding:14px 0 24px">
+      <p class="eyebrow">Pictionary, refereed</p>
+      <h1 style="margin-top:8px">Marker&nbsp;&amp;<br>Mayhem</h1>
+      <div class="lbl" style="margin-top:12px;align-items:flex-start">
+        <p class="sub" style="flex:1">One word, both teams drawing it at once. I hold the word, run the clock, and keep the tally.</p>
+        <button class="info" aria-expanded="false" aria-label="How a round works">i</button>
+      </div>
+      <p class="hint">A round goes: the picking team chooses a theme, then one of three words worth 1, 2 or 3 points. Both teams draw that same word at the same time. First team to guess it takes the points. The picking team alternates each round.</p>
+    </header>
+
+    <div class="field" id="saves-field" hidden>
+      <div class="lbl"><span class="eyebrow">Pick up where you left off</span>
+        <button class="info" aria-expanded="false" aria-label="About saved games">i</button></div>
+      <p class="hint">Games save themselves after every round. Resuming restores the scores, the round number and the list of words already used, so a game continued next week still won't repeat a prompt.</p>
+      <div id="saves"></div>
+    </div>
+
+    <div class="field">
+      <div class="lbl"><span class="eyebrow">Teams</span>
+        <button class="info" aria-expanded="false" aria-label="About team names">i</button></div>
+      <p class="hint">These names appear on the two scoring buttons and the tally board. Rename either team mid-game from the scoreboard, so nicknames that emerge over the night are easy to adopt.</p>
+      <div class="namerow" style="margin-bottom:9px">
+        <span class="swatch" style="background:var(--red)"></span>
+        <input type="text" id="n0" value="Red" maxlength="18" aria-label="Team one name">
+      </div>
+      <div class="namerow">
+        <span class="swatch" style="background:var(--blue)"></span>
+        <input type="text" id="n1" value="Blue" maxlength="18" aria-label="Team two name">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="lbl"><span class="eyebrow">Seconds to draw</span>
+        <button class="info" aria-expanded="false" aria-label="About the timer">i</button></div>
+      <p class="hint">How long both teams get on each word. The clock ticks once a second from 20 seconds left, twice a second from 10, and four times a second for the last 5. Pick 60 for a fast, loud game.</p>
+      <div class="seg" id="seg-len">
+        <button data-v="60">60</button><button data-v="90">90</button><button data-v="120">120</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="lbl"><span class="eyebrow">Word difficulty</span>
+        <button class="info" aria-expanded="false" aria-label="About difficulty">i</button></div>
+      <p class="hint">Sets which tier the three cards come from. Easy stays with plain objects. Medium spans objects to short phrases. Hard reaches into idioms and absurd mashups like "rusty werewolf mowing the lawn". Mixed varies it round to round.</p>
+      <div class="seg" id="seg-diff">
+        <button data-v="easy">Easy</button><button data-v="medium">Medium</button>
+        <button data-v="hard">Hard</button><button data-v="mixed">Mixed</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="lbl"><span class="eyebrow">Rounds</span>
+        <button class="info" aria-expanded="false" aria-label="About round count">i</button></div>
+      <p class="hint">One round is one word. At 90 seconds, ten rounds runs about 25 minutes with the chat between. When the last round finishes, whoever leads wins. You can also wrap up early at any point.</p>
+      <div class="seg" id="seg-rounds">
+        <button data-v="5">5</button><button data-v="10">10</button>
+        <button data-v="15">15</button><button data-v="0">No cap</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="lbl"><span class="eyebrow">Early finish at</span>
+        <button class="info" aria-expanded="false" aria-label="About the score target">i</button></div>
+      <p class="hint">A knockout score. If a team reaches it, the game ends there even with rounds left. Choose "No target" to always play the full set of rounds.</p>
+      <div class="seg" id="seg-target">
+        <button data-v="10">10</button><button data-v="15">15</button>
+        <button data-v="20">20</button><button data-v="0">No target</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="lbl"><span class="eyebrow">Devices</span>
+        <button class="info" aria-expanded="false" aria-label="About multi-device play">i</button></div>
+      <p class="hint">One phone means both drawers huddle around it and the picking team chooses the theme and card. A phone per team gives each drawer their own screen: rounds then deal themselves from a shared seed so every phone shows the same word with no network between them. Guests join by scanning a code.</p>
+      <div class="seg" id="seg-devices">
+        <button data-v="solo">One phone</button><button data-v="host">Phone per team</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="lbl"><span class="eyebrow">Feedback</span>
+        <button class="info" aria-expanded="false" aria-label="About sound and vibration">i</button></div>
+      <p class="hint">Buttons give a short vibration and the clock ticks aloud. Vibration works on Android browsers; iOS Safari exposes no vibration API, so iPhones get sound only. Both can be toggled mid-game from the scoreboard.</p>
+      <div class="seg" id="seg-feedback">
+        <button data-v="both">Sound + buzz</button><button data-v="sound">Sound</button>
+        <button data-v="buzz">Buzz</button><button data-v="none">Silent</button>
+      </div>
+    </div>
+
+    <div class="mt">
+      <button class="btn btn--yellow" id="go" data-haptic="20">Start a new game</button>
+      <button class="btn btn--ghost btn--sm" id="open-join" style="margin-top:10px">Join a game on this phone</button>
+      <div class="field" id="rejoin-field" hidden style="margin-top:14px">
+        <div class="save">
+          <div class="meta">
+            <div class="stitle">Rejoin</div>
+            <div class="smeta" id="rejoin-label"></div>
+          </div>
+          <button class="resume" id="rejoin">Rejoin</button>
+        </div>
+      </div>
+      <p class="sub footnote" id="poolnote"></p>
+    </div>
+  </section>
+
+  <!-- ==================== HANDOFF ==================== -->
+  <section class="screen" id="s-handoff">
+    <div class="topbar">
+      <p class="eyebrow" id="roundlabel">Round 1</p>
+      <div class="linkrow">
+        <button class="linkbtn" id="sound-toggle">Sound: on</button>
+        <button class="linkbtn" id="buzz-toggle">Buzz: on</button>
+      </div>
+    </div>
+
+    <div class="board" id="board"></div>
+    <div class="renamer" id="renamer">
+      <div class="namerow"><span class="swatch" style="background:var(--red)"></span>
+        <input type="text" id="r0" maxlength="18" aria-label="Rename team one"></div>
+      <div class="namerow"><span class="swatch" style="background:var(--blue)"></span>
+        <input type="text" id="r1" maxlength="18" aria-label="Rename team two"></div>
+      <button class="btn btn--sm" id="rename-save">Save names</button>
+    </div>
+    <div class="boardfoot">
+      <button class="linkbtn" id="rename-toggle">Rename teams</button>
+      <button class="linkbtn" id="adjust-toggle">Fix a score</button>
+      <button class="linkbtn" id="wrap-handoff">Wrap up game</button>
+    </div>
+
+    <div class="center">
+      <span class="turnbadge"><span class="swatch" id="turn-swatch"></span><span id="turn-team">Red</span> picks this round</span>
+      <span class="turnbadge sync" id="sync-badge" hidden>Sync code <b id="sync-code">A7F2</b></span>
+      <h2 id="handoff-head">Both drawers, huddle up</h2>
+      <p class="sub" id="handoff-sub">One drawer from each team looks at the screen together. Everyone else: eyes off.</p>
+    </div>
+
+    <div class="stack">
+      <button class="btn" id="reveal" data-haptic="20">We're the drawers — deal us in</button>
+      <button class="btn btn--ghost btn--sm" id="pause">Pause and save for later</button>
+      <div style="text-align:center"><button class="linkbtn" id="show-invite">Show the join code again</button></div>
+    </div>
+  </section>
+
+  <!-- ==================== THEME ==================== -->
+  <section class="screen" id="s-theme">
+    <div class="topbar">
+      <p class="eyebrow" id="theme-who">Red picks the theme</p>
+      <div class="linkrow">
+        <button class="linkbtn" id="panic1">Hide</button>
+        <button class="linkbtn" id="wrap-theme">Wrap up</button>
+      </div>
+    </div>
+    <p class="sub" style="margin-bottom:16px">Pick a theme. Everyone gets told which one you chose — just not the word.</p>
+    <div class="themes" id="themes"></div>
+  </section>
+
+  <!-- ==================== PICK ==================== -->
+  <section class="screen" id="s-pick">
+    <div class="topbar">
+      <p class="eyebrow" id="pick-who">Animals — both teams draw it</p>
+      <div class="linkrow">
+        <button class="linkbtn" id="panic2">Hide</button>
+        <button class="linkbtn" id="wrap-pick">Wrap up</button>
+      </div>
+    </div>
+    <div class="cards" id="cards"></div>
+    <div class="picktools">
+      <button class="btn btn--ghost btn--sm" id="back-theme">Different theme</button>
+      <button class="btn btn--ghost btn--sm" id="reshuffle">Deal three new</button>
+    </div>
+  </section>
+
+  <!-- ==================== DRAW ==================== -->
+  <section class="screen" id="s-draw">
+    <div class="topbar">
+      <p class="eyebrow" id="draw-theme">🐘 Animals</p>
+      <p class="eyebrow" id="draw-worth">Worth 2</p>
+    </div>
+    <div class="timerwrap">
+      <div class="clock" id="clock" role="timer" aria-live="off">1:30</div>
+      <div class="stroke"><i id="stroke"></i></div>
+      <button class="peek" id="peek">Hold to see the word</button>
+      <button class="linkbtn" id="pin-toggle" aria-pressed="false">Keep it on screen</button>
+    </div>
+    <div class="drawfoot">
+      <p class="eyebrow" style="text-align:center">First team to shout it wins the points</p>
+      <button class="btn btn--red" id="got0" data-haptic="34">Red got it</button>
+      <button class="btn btn--blue" id="got1" data-haptic="34">Blue got it</button>
+      <button class="btn btn--ghost btn--sm" id="giveup">Nobody got it</button>
+      <button class="btn btn--yellow" id="guest-done">Round over</button>
+      <div style="text-align:center"><button class="linkbtn" id="wrap-draw">Wrap up game</button></div>
+    </div>
+  </section>
+
+
+  <!-- ==================== INVITE (host) ==================== -->
+  <section class="screen" id="s-invite">
+    <div class="topbar">
+      <p class="eyebrow">Get everyone in</p>
+      <button class="linkbtn" id="invite-copy">Copy link</button>
+    </div>
+
+    <div class="qrcard">
+      <div id="invite-qr" class="qrholder"></div>
+      <p class="code" id="invite-code">K7M3 QP2X</p>
+    </div>
+
+    <p class="sub" id="invite-qr-note" style="margin-top:16px"></p>
+    <p class="sub urlline" id="invite-url"></p>
+
+    <div class="lbl" style="margin-top:20px">
+      <span class="eyebrow">How the other phones join</span>
+      <button class="info" aria-expanded="false" aria-label="About joining">i</button>
+    </div>
+    <p class="hint">Fastest: point the built-in camera app at the code — it opens the game already joined. Otherwise open this same page on the other phone, tap "Join a game on this phone" and type the eight characters. Nothing is sent anywhere; both phones just derive the same rounds from the same number.</p>
+
+    <div class="stack mt">
+      <button class="btn btn--yellow" id="invite-done" data-haptic="20">Everyone's in — play</button>
+    </div>
+  </section>
+
+  <!-- ==================== JOIN (guest) ==================== -->
+  <section class="screen" id="s-join">
+    <div class="topbar">
+      <p class="eyebrow">Join a game</p>
+      <button class="linkbtn" id="join-back">Back</button>
+    </div>
+
+    <p class="sub" style="margin-bottom:18px">Type the eight characters from the host's phone, or scan the code.</p>
+
+    <div class="field">
+      <input type="text" id="join-code" class="codeinput" maxlength="12" placeholder="K7M3 QP2X"
+             autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"
+             aria-label="Join code">
+      <p class="errline" id="join-error" role="alert"></p>
+    </div>
+
+    <div class="scanwrap" id="scan-wrap" hidden>
+      <video id="scan-video" playsinline muted></video>
+      <button class="btn btn--ghost btn--sm" id="scan-cancel">Stop scanning</button>
+    </div>
+
+    <div class="stack mt">
+      <button class="btn btn--yellow" id="join-go" data-haptic="20">Join</button>
+      <button class="btn btn--ghost btn--sm" id="join-scan" hidden>Scan the code instead</button>
+    </div>
+  </section>
+
+  <!-- ==================== GUEST READY ==================== -->
+  <section class="screen" id="s-guest">
+    <div class="topbar">
+      <p class="eyebrow" id="guest-round">Round 1</p>
+      <div class="linkrow">
+        <button class="linkbtn" id="guest-leave">Leave</button>
+      </div>
+    </div>
+
+    <div class="center">
+      <span class="turnbadge sync">Sync code <b id="guest-sync">A7F2</b></span>
+      <h2>You're a drawer</h2>
+      <p class="sub">Check the sync code matches the host's. If it doesn't, step this phone's round to line up.</p>
+      <div class="preview">
+        <span class="pv-theme" id="guest-theme">🐘 Animals</span>
+        <span class="pv-worth" id="guest-worth">Worth 2</span>
+      </div>
+    </div>
+
+    <div class="boardfoot">
+      <button class="linkbtn" id="guest-back">− round</button>
+      <button class="linkbtn" id="guest-fwd">+ round</button>
+    </div>
+
+    <div class="stack">
+      <button class="btn btn--yellow" id="guest-start" data-haptic="20">Show the word and start</button>
+    </div>
+  </section>
+
+  <!-- ==================== RESULT ==================== -->
+  <section class="screen" id="s-result">
+    <div class="center">
+      <p class="eyebrow" id="res-eyebrow">Round over</p>
+      <p class="verdict" id="verdict">+2</p>
+      <p class="sub">The word was</p>
+      <span class="answer" id="res-word">campfire</span>
+    </div>
+    <div class="board" id="board2"></div>
+    <div class="stack" style="margin-top:18px">
+      <button class="btn" id="next" data-haptic="18">Next round</button>
+      <div style="text-align:center"><button class="linkbtn" id="wrap-result">Wrap up game</button></div>
+    </div>
+  </section>
+
+  <!-- ==================== WIN ==================== -->
+  <section class="screen" id="s-win">
+    <div style="text-align:center;padding:20px 0 6px">
+      <p class="eyebrow">Final tally</p>
+      <h1 id="win-name" style="margin-top:8px">Red</h1>
+      <p class="sub" id="win-line">takes it.</p>
+    </div>
+    <div class="board" id="board3" style="margin-top:16px"></div>
+    <div class="log" id="log"></div>
+    <div class="stack" style="margin-top:18px">
+      <button class="btn btn--yellow" id="share" data-haptic="20">Share the tally</button>
+      <button class="btn" id="again">Rematch</button>
+      <button class="btn btn--ghost btn--sm" id="reset">Back to setup</button>
+    </div>
+  </section>
+</div>
+
+<!-- ==================== OVERLAYS ==================== -->
+<div class="veil" id="veil">
+  <p class="eyebrow">Screen hidden</p>
+  <h2>Nothing to see</h2>
+  <p class="sub">Tap anywhere when it's just the drawers looking.</p>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title">
+  <div class="sheet">
+    <h3 id="m-title">Wrap up the game?</h3>
+    <p id="m-body">Scores stand as they are and we go to the final tally.</p>
+    <div class="stack">
+      <button class="btn btn--yellow" id="m-yes">Wrap it up</button>
+      <button class="btn btn--ghost btn--sm" id="m-no">Keep playing</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="share-modal" role="dialog" aria-modal="true" aria-labelledby="sh-title">
+  <div class="sheet">
+    <h3 id="sh-title">Final tally</h3>
+    <div class="shot" id="shot"></div>
+    <p class="sub footnote" id="sh-hint">Long-press the image to save it.</p>
+    <div class="stack" style="margin-top:14px">
+      <button class="btn btn--yellow" id="sh-share" data-haptic="20">Share or save</button>
+      <button class="btn btn--ghost btn--sm" id="sh-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="src/game.js"></script>
+</body>
+</html>

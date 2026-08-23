@@ -1,0 +1,19 @@
+{
+  "name": "Marker & Mayhem",
+  "short_name": "Mayhem",
+  "description": "A Pictionary host for one phone. Both teams draw the same word at the same time.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12142A",
+  "theme_color": "#12142A",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

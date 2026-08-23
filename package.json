@@ -1,0 +1,29 @@
+{
+  "name": "marker-and-mayhem",
+  "version": "1.0.0",
+  "description": "A browser Pictionary host. Both teams draw the same word at once, and every phone stays in sync offline.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/run.mjs",
+    "test:dom": "node build.mjs && node test/dom.mjs",
+    "test:all": "npm run test && npm run test:dom",
+    "start": "node build.mjs && python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.0"
+  },
+  "keywords": [
+    "pictionary",
+    "party-game",
+    "offline-first",
+    "pwa",
+    "qr",
+    "zero-dependency"
+  ]
+}
