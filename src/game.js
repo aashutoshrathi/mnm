@@ -210,21 +210,33 @@ function snapshot() {
   };
 }
 
-async function persist() {
-  if (!S.id || isGuest()) return;
-  const games = (await store.get(SAVE_KEY)) || [];
-  const i = games.findIndex((g) => g.id === S.id);
-  if (i >= 0) games[i] = snapshot();
-  else games.unshift(snapshot());
-  games.sort((a, b) => b.at - a.at);
-  await store.set(SAVE_KEY, games.slice(0, MAX_SAVES));
+let persistQueue = Promise.resolve();
+
+function persist() {
+  persistQueue = persistQueue
+    .then(async () => {
+      if (!S.id || isGuest()) return;
+      const games = (await store.get(SAVE_KEY)) || [];
+      const i = games.findIndex((g) => g.id === S.id);
+      if (i >= 0) games[i] = snapshot();
+      else games.unshift(snapshot());
+      games.sort((a, b) => b.at - a.at);
+      await store.set(SAVE_KEY, games.slice(0, MAX_SAVES));
+    })
+    .catch(() => {});
+  return persistQueue;
 }
 
-async function clearCurrentSave() {
-  if (!S.id || isGuest()) return;
+function clearCurrentSave() {
   const targetId = S.id;
-  const games = ((await store.get(SAVE_KEY)) || []).filter((g) => g.id !== targetId);
-  await store.set(SAVE_KEY, games);
+  persistQueue = persistQueue
+    .then(async () => {
+      if (!targetId || isGuest()) return;
+      const games = ((await store.get(SAVE_KEY)) || []).filter((g) => g.id !== targetId);
+      await store.set(SAVE_KEY, games);
+    })
+    .catch(() => {});
+  return persistQueue;
 }
 
 async function renderSaves() {

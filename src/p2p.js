@@ -112,6 +112,62 @@ export function sendP2P(type, payload = {}) {
   }
 }
 
+let p2pReconnectTimer = null;
+
+function setupWebSocket(clientId) {
+  if (typeof WebSocket === 'undefined' || !p2pRoomTopic) return;
+  try {
+    p2pWs = new WebSocket(MQTT_BROKER, ['mqtt']);
+    p2pWs.binaryType = 'arraybuffer';
+
+    p2pWs.onopen = () => {
+      p2pWs.send(encodeConnect(clientId));
+    };
+
+    p2pWs.onmessage = (e) => {
+      const buf = new Uint8Array(e.data);
+      const type = buf[0] >> 4;
+
+      if (type === 2) {
+        /* CONNACK received */
+        p2pConnected = true;
+        p2pStatusHandler({ connected: true });
+        p2pWs.send(encodeSubscribe(p2pRoomTopic));
+        sendP2P('PEER_PING', { role: p2pRole });
+      } else if (type === 3) {
+        /* PUBLISH received */
+        let offset = 2;
+        const topicLen = (buf[offset] << 8) | buf[offset + 1];
+        offset += 2 + topicLen;
+        const payloadStr = new TextDecoder().decode(buf.subarray(offset));
+        try {
+          const parsed = JSON.parse(payloadStr);
+          if (!parsed || parsed.from === p2pRole) return;
+          p2pMessageHandler(parsed);
+        } catch (err) {
+          /* ignore malformed payload */
+        }
+      }
+    };
+
+    p2pWs.onerror = () => {
+      p2pConnected = false;
+      p2pStatusHandler({ connected: false });
+    };
+
+    p2pWs.onclose = () => {
+      p2pConnected = false;
+      p2pStatusHandler({ connected: false });
+      if (p2pRoomTopic) {
+        clearTimeout(p2pReconnectTimer);
+        p2pReconnectTimer = setTimeout(() => setupWebSocket(clientId), 2500);
+      }
+    };
+  } catch (err) {
+    p2pWs = null;
+  }
+}
+
 export function connectP2P({
   code = '',
   role = 'host',
@@ -142,60 +198,15 @@ export function connectP2P({
     }
   }
 
-  if (typeof WebSocket !== 'undefined') {
-    try {
-      const clientId = `mnm-${role}-${Math.random().toString(36).slice(2, 8)}`;
-      p2pWs = new WebSocket(MQTT_BROKER, ['mqtt']);
-      p2pWs.binaryType = 'arraybuffer';
-
-      p2pWs.onopen = () => {
-        p2pWs.send(encodeConnect(clientId));
-      };
-
-      p2pWs.onmessage = (e) => {
-        const buf = new Uint8Array(e.data);
-        const type = buf[0] >> 4;
-
-        if (type === 2) {
-          /* CONNACK received */
-          p2pConnected = true;
-          p2pStatusHandler({ connected: true });
-          p2pWs.send(encodeSubscribe(p2pRoomTopic));
-          sendP2P('PEER_PING', { role: p2pRole });
-        } else if (type === 3) {
-          /* PUBLISH received */
-          let offset = 2;
-          const topicLen = (buf[offset] << 8) | buf[offset + 1];
-          offset += 2 + topicLen;
-          const payloadStr = new TextDecoder().decode(buf.subarray(offset));
-          try {
-            const parsed = JSON.parse(payloadStr);
-            if (!parsed || parsed.from === p2pRole) return;
-            p2pMessageHandler(parsed);
-          } catch (err) {
-            /* ignore malformed payload */
-          }
-        }
-      };
-
-      p2pWs.onerror = () => {
-        p2pConnected = false;
-        p2pStatusHandler({ connected: false });
-      };
-
-      p2pWs.onclose = () => {
-        p2pConnected = false;
-        p2pStatusHandler({ connected: false });
-      };
-    } catch (err) {
-      p2pWs = null;
-    }
-  }
+  const clientId = `mnm-${role}-${Math.random().toString(36).slice(2, 8)}`;
+  setupWebSocket(clientId);
 }
 
 export function disconnectP2P() {
   p2pConnected = false;
   p2pRoomTopic = '';
+  clearTimeout(p2pReconnectTimer);
+  p2pReconnectTimer = null;
   if (p2pChannel) {
     try {
       p2pChannel.close();
