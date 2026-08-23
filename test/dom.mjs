@@ -202,7 +202,7 @@ await test('renaming teams mid-game updates the board', async () => {
   dom.window.close();
 });
 
-await test('wrapping up asks first and can be declined', async () => {
+await test('wrapping up asks first, and completed games are removed from resume saves', async () => {
   const dom = await boot();
   click(dom, 'go');
   click(dom, 'wrap-handoff');
@@ -215,6 +215,27 @@ await test('wrapping up asks first and can be declined', async () => {
   click(dom, 'm-yes');
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(active(dom), 's-win');
+
+  click(dom, 'reset');
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(active(dom), 's-setup');
+  assert.ok($(dom, 'saves-field').hidden, 'wrapped-up games must not appear in resume saves');
+  dom.window.close();
+});
+
+await test('saved games can be cleared all at once', async () => {
+  const dom = await boot();
+  click(dom, 'go');
+  click(dom, 'pause');
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(active(dom), 's-setup');
+  assert.ok(!$(dom, 'saves-field').hidden, 'paused game should appear in saves');
+
+  click(dom, 'clear-all-saves');
+  assert.ok($(dom, 'modal').classList.contains('on'), 'confirmation modal should open');
+  click(dom, 'm-yes');
+  await new Promise((r) => setTimeout(r, 30));
+  assert.ok($(dom, 'saves-field').hidden, 'clearing all saves must empty the list');
   dom.window.close();
 });
 
@@ -364,7 +385,7 @@ await test('a guest advancing lands on the next round', async () => {
   guest.window.close();
 });
 
-await test('the duo pad opens over the draw screen and closes', async () => {
+await test('the drawing pad opens over the draw screen and closes', async () => {
   const dom = await boot();
   click(dom, 'go');
   click(dom, 'reveal');
@@ -375,7 +396,8 @@ await test('the duo pad opens over the draw screen and closes', async () => {
   click(dom, 'duo-toggle');
   assert.ok(!$(dom, 'duo-pad').hidden, 'pad should be visible');
   assert.equal($(dom, 'pad-clock').textContent, $(dom, 'clock').textContent, 'pad mirrors the clock');
-  assert.match($(dom, 'pad-word').textContent, /Hold for the word/);
+  assert.match($(dom, 'pad-title').textContent, /Drawing Pad/);
+  assert.ok($(dom, 'pad-sideboard').hidden, 'sideboard is hidden in solo split mode');
 
   click(dom, 'pad-clear');
   click(dom, 'pad-done');
@@ -386,18 +408,46 @@ await test('the duo pad opens over the draw screen and closes', async () => {
   dom.window.close();
 });
 
-await test('guests never see the duo pad toggle', async () => {
+await test('guests can open the drawing pad to draw for their team with opponent sideboard', async () => {
   const host = await boot();
   pickSegment(host, 'seg-devices', 'host');
   click(host, 'go');
   const url = $(host, 'invite-url').textContent;
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
-  const styles = guest.window.getComputedStyle($(guest, 'duo-toggle'));
-  assert.ok(
-    !visible(guest, 'duo-toggle') || styles.display === 'none',
-    'the toggle should be hidden for guests'
-  );
+  click(guest, 'guest-start');
+  assert.equal(active(guest), 's-draw');
+  assert.ok(visible(guest, 'duo-toggle'), 'the toggle should be available for guests');
+
+  click(guest, 'duo-toggle');
+  assert.ok(!$(guest, 'duo-pad').hidden, 'pad should open on guest phone');
+  assert.match($(guest, 'pad-title').textContent, /Drawing Pad/);
+  assert.ok(!$(guest, 'pad-sideboard').hidden, 'opponent sideboard should be visible on guest');
+  assert.match($(guest, 'sideboard-title').textContent, /Foxes|Other Team/);
+  click(guest, 'pad-done');
+  assert.ok($(guest, 'duo-pad').hidden, 'Done should close guest pad');
+
+  host.window.close();
+  guest.window.close();
+});
+
+await test('guests can review and edit their team name on join', async () => {
+  const host = await boot();
+  pickSegment(host, 'seg-devices', 'host');
+  click(host, 'go');
+  const url = $(host, 'invite-url').textContent;
+
+  const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  assert.equal(active(guest), 's-guest');
+  assert.equal($(guest, 'guest-team-name').textContent, 'Blue');
+
+  click(guest, 'guest-rename-toggle');
+  assert.ok(!$(guest, 'guest-renamer').hidden, 'guest renamer should expand');
+  $(guest, 'gr-name').value = 'Speedy Otters';
+  click(guest, 'gr-save');
+
+  assert.ok($(guest, 'guest-renamer').hidden, 'guest renamer should close after save');
+  assert.equal($(guest, 'guest-team-name').textContent, 'Speedy Otters');
 
   host.window.close();
   guest.window.close();

@@ -1,7 +1,7 @@
 # Marker & Mayhem
 
 A Pictionary host that runs in a browser tab. It deals the prompts, runs the
-clock, keeps the tally, and - the part that makes it different - keeps a phone
+clock, keeps the tally, and, the part that makes it different, keeps a phone
 per team showing the same word at the same time **with no network between them**.
 
 No build step required, no dependencies at runtime, no accounts, no backend.
@@ -9,7 +9,7 @@ One HTML file and a folder of ES modules.
 
 ```
 npm test          # 45 unit tests (zero dev dependencies)
-npm run test:dom  # 18 integration tests in jsdom
+npm run test:dom  # 20 integration tests in jsdom
 npm run build     # bundle everything into dist/index.html
 npm start         # build + serve on http://localhost:8080
 ```
@@ -38,7 +38,7 @@ First team to shout it takes the points.
 That one change does a lot of work. Nobody sits idle waiting their turn, the two
 drawings are directly comparable, and the room stays loud for the whole round.
 It also means the app's only hard job is getting the same word onto every phone
-at the same moment - which is the whole design problem below.
+at the same moment: which is the whole design problem below.
 
 ## Run it
 
@@ -49,7 +49,7 @@ python3 -m http.server 8080     # then open http://localhost:8080
 ```
 
 Or push the repo to GitHub Pages and open the URL. Or run `npm run build` and
-open `dist/index.html` straight off the filesystem - a single self-contained
+open `dist/index.html` straight off the filesystem: a single self-contained
 file with the CSS and JS inlined, useful for AirDropping to someone.
 
 > Serve it over `http(s)` rather than `file://` if you want multi-device play.
@@ -59,50 +59,53 @@ file with the CSS and JS inlined, useful for AirDropping to someone.
 
 | Setting | Options | Notes |
 |---|---|---|
-| Seconds to draw | 60 / 90 / 120 | The clock ticks faster over the last 20 seconds |
-| Difficulty | Easy / Medium / Hard / Mixed | Sets which tier the three cards draw from |
-| Rounds | 5 / 10 / 15 / No cap | Whoever leads when the cap hits wins |
-| Early finish at | 10 / 15 / 20 / No target | A knockout score; ends the game the moment it's reached |
+| Teams | Custom names (e.g. Foxes vs Owls) | Editable on setup or mid-game |
 | Devices | One phone / Phone per team | See [Multi-device play](#multi-device-play) |
+| Rounds | 5 / 10 / 15 / No cap | Whoever leads when the cap hits wins |
+| Difficulty | Easy / Medium / Hard / Mixed | Sets which tier the three cards draw from |
+| Seconds to draw | 60 / 90 / 120 | The clock ticks faster over the last 20 seconds |
+| Early finish at | 10 / 15 / 20 / No target | A knockout score; ends the game the moment it's reached |
 | Feedback | Sound + buzz / either / Silent | Vibration is Android-only; iOS gets sound |
 
+Setup groups the core decisions (Teams, Devices, Rounds, Word difficulty) upfront,
+placing secondary parameters inside a collapsible *More options* drawer.
 Games end on the round cap, the score target, or "wrap up" from any screen.
-Games save themselves after every round - see [Persistence](#persistence).
+Active games save themselves after every round, and finished or wrapped-up games
+are automatically cleared from the resume list: see [Persistence](#persistence).
 
 ## How a round goes
 
-1. **Handoff** - whose turn it is to pick, plus the running tally in chalk marks.
-2. **Theme** - the picking team gets four random themes and "Anything goes".
+1. **Handoff**: whose turn it is to pick, plus the running tally in chalk marks.
+2. **Theme**: the picking team gets four random themes and "Anything goes".
    The theme is announced out loud; the word is not.
-3. **Cards** - three prompts at 1, 2 and 3 points. Harder word, more points.
+3. **Cards**: three prompts at 1, 2 and 3 points. Harder word, more points.
    Reshuffle if all three are duds.
-4. **Draw** - 90 seconds, ticking faster over the last 20. Hold the button to
+4. **Draw**: 90 seconds, ticking faster over the last 20. Hold the button to
    re-read the word. A panic button blanks the screen if someone walks past.
-5. **Result** - who got it, what it was, updated tally.
+   Tap **"No paper? Draw it right here"** to draw directly on the screen.
+5. **Result**: who got it, what it was, updated tally.
 
-Nothing repeats within a game - in solo mode via a used-set, in synced mode by
+Nothing repeats within a game: in solo mode via a used-set, in synced mode by
 deriving the whole history deterministically (see below).
 
 ## Drawing on the phone itself
 
-Sometimes there's no paper in the room either. On the draw screen, tap
-**"No paper? Draw it right here"** and the phone becomes the shared sheet:
+When paper is missing, tap **"No paper? Draw it right here"** on the draw
+screen to turn the phone into an instant digital drawing surface:
 
-- The canvas splits into two halves along a dashed line - **red draws above,
-  blue draws below** - so each artist owns a zone.
-- Real multi-touch: both artists draw simultaneously, each with a finger.
-  Strokes take their half's colour based on where they *start*, so crossing the
-  line to steal space keeps your colour.
-- It's an overlay: the clock keeps running underneath, the panic veil still
-  covers everything, and "Done" drops you straight back to the clock.
-- A hold-for-word button lives in the pad's toolbar, so nobody has to leave the
-  sheet to re-read the prompt.
-
-Because both artists share one screen, live updates are free - this surface
-needs no network, no WebRTC, no anything. Two phones drawing onto one shared
-canvas *would* need a live channel, and that's the one thing this app refuses
-to require. Rotating the phone clears the sheet; that's the trade for not
-shipping a redraw-and-replay stroke buffer.
+- **Solo mode (One phone)**: The canvas splits into two halves along a dashed
+  line (Red draws above, Blue draws below) with multi-touch so both artists sketch
+  on the shared screen at once.
+- **Multi-device mode (Phone per team)**: Each artist gets a full-screen canvas
+  in their team color (Red on Host, Blue on Guest).
+- **Real-Time Opponent Sideboard**: In multi-device mode, a compact picture-in-picture
+  preview in the top-right corner displays the other team's drawing live in real time
+  via `BroadcastChannel` (syncing across tabs with zero server).
+- **Cheat-Proof Canvas**: The secret word is never visible on the drawing pad,
+  allowing teammates and guessers to look directly at the phone screen and shout guesses
+  without spoiling the answer.
+- **Screen Wake Lock**: Mobile screens stay awake via the Screen Wake Lock API during
+  active rounds so displays never sleep mid-sketch.
 
 ## Multi-device play
 
@@ -118,7 +121,7 @@ off.
 
 | Route | How | Needs |
 |---|---|---|
-| Camera app | Point the phone's built-in camera at the QR | Nothing - it's a URL, so the OS opens the game already joined |
+| Camera app | Point the phone's built-in camera at the QR | Nothing: it's a URL, so the OS opens the game already joined |
 | In-app scan | "Scan the code instead" on the join screen | `BarcodeDetector` (Chromium) |
 | Typed code | Eight characters, e.g. `1GN5 6NDK` | Nothing. Works everywhere, always |
 
@@ -128,7 +131,7 @@ is the fast path rather than the only one.
 
 ### What synced mode changes
 
-Rounds **deal themselves** - no theme or card picking. That isn't a limitation
+Rounds **deal themselves**: no theme or card picking. That isn't a limitation
 worked around, it's the point: the picking team's choice is the only state that
 would need a live channel, and removing it removes the need for one. For all-play
 it's arguably fairer anyway, since neither team gets to set the stakes.
@@ -139,7 +142,7 @@ first; a second tally would just be a second thing to disagree with.
 ### Drift, and why it's visible instead of hidden
 
 If someone double-taps "next round", their phone is a round ahead and shows a
-different word. With no channel there is no way to detect that automatically -
+different word. With no channel there is no way to detect that automatically:
 so the app makes it obvious instead of pretending otherwise.
 
 Every device shows a four-character **sync code** derived from `(seed, round)`.
@@ -162,7 +165,7 @@ Forty bits, rendered as eight Crockford base32 characters:
 The CRC is not decoration. Without it, one mistyped character yields a
 valid-looking code that silently starts a *different* game, and the two phones
 only find out mid-round. CRC-8 detects every burst error shorter than eight bits,
-and a wrong base32 character is a burst of at most five - so every
+and a wrong base32 character is a burst of at most five: so every
 single-character typo is caught, not merely most of them. There's a test that
 walks all 248 of them.
 
@@ -171,12 +174,12 @@ lookalikes back, so `I` reads as `1` and `O` as `0` when a code is read aloud ba
 
 ### Transports considered and rejected
 
-- **Web Bluetooth** - central-only in browsers. A page can talk to a peripheral,
+- **Web Bluetooth**: central-only in browsers. A page can talk to a peripheral,
   but two phones are both centrals, so phone-to-phone is impossible by design.
-- **Wi-Fi Direct / Aware** - no web API at all.
-- **WebRTC** - needs a signalling server and a shared network. The premise here
+- **Wi-Fi Direct / Aware**: no web API at all.
+- **WebRTC**: needs a signalling server and a shared network. The premise here
   is that there isn't one.
-- **Ultrasonic data** - genuinely works, but it's a lot of DSP to move 40 bits
+- **Ultrasonic data**: genuinely works, but it's a lot of DSP to move 40 bits
   that a QR moves instantly and a human can read aloud.
 
 The seed approach beats all of them by needing no ongoing channel whatsoever.
@@ -185,16 +188,20 @@ The seed approach beats all of them by needing no ongoing channel whatsoever.
 
 Saves go through the first storage backend that works, probed in order:
 
-1. **Host store** - `window.storage`, where an embedding runtime provides one.
-2. **`localStorage`** - survives closing the tab; the normal web case.
-3. **`sessionStorage`** - survives reloads but not the tab (e.g. Safari private
+1. **Host store**: `window.storage`, where an embedding runtime provides one.
+2. **`localStorage`**: survives closing the tab; the normal web case.
+3. **`sessionStorage`**: survives reloads but not the tab (e.g. Safari private
    browsing). Saves work; the toast says "for this session" honestly.
-4. **Memory** - last resort, survives nothing beyond the current screen flow.
+4. **Memory**: last resort, survives nothing beyond the current screen flow.
 
 Sandboxed iframes can throw just on *touching* storage, so every backend is
 probed before use rather than assumed. Saved games keep scores, the round
-number, team names and the used-word list - a game continued next week still
+number, team names and the used-word list: a game continued next week still
 won't repeat a prompt.
+
+When games wrap up or complete, they are immediately cleared from the active
+resume list. Users can also delete individual saved games or tap "Clear all saved
+games" from setup.
 
 To change the chain, edit one line in `game.js`:
 
@@ -207,11 +214,11 @@ const store = createStore([ADAPTERS.host, webAdapter, sessionAdapter, ADAPTERS.m
 ```
 index.html              markup only
 build.mjs               flattens src/ into a single-file dist/index.html
-sw.js                   service worker - offline shell
+sw.js                   service worker: offline shell
 manifest.webmanifest    installable to a home screen
 src/
   game.js               state machine, screens, wiring (solo | host | guest)
-  duo.js                shared drawing pad: multi-touch, one artist per half
+  duo.js                drawing surface: single-team canvas + real-time sideboard
   words.js              prompt bank, themes, mashup generator
   sync.js               deterministic round derivation, sync codes
   joincode.js           40-bit payload codec, CRC-8, invite URLs
@@ -226,7 +233,7 @@ src/
   styles.css
 test/
   run.mjs               45 unit tests, zero dependencies
-  dom.mjs               18 integration tests in jsdom
+  dom.mjs               20 integration tests in jsdom
 ```
 
 ## The QR encoder
@@ -239,7 +246,7 @@ Reed-Solomon over GF(256), block interleaving, the zigzag data walk, all eight
 mask patterns scored by the four standard penalty rules, and BCH-protected
 format and version blocks.
 
-It's verified two ways. The unit tests assert on each stage independently -
+It's verified two ways. The unit tests assert on each stage independently:
 generator polynomials, RS vectors, the published format and version bit tables,
 block structure, finder and timing patterns. Separately, during development every
 version/EC combination was filled to exact capacity, rendered, and decoded with
@@ -272,16 +279,18 @@ other tiers, other themes, then generated mashups, which never run out.
 
 ## Browser notes
 
-- **Haptics** - `navigator.vibrate` doesn't exist in Safari. The Buzz toggle
+- **Screen Wake Lock**: keeps mobile displays illuminated during drawing and active
+  rounds via `navigator.wakeLock`.
+- **Haptics**: `navigator.vibrate` doesn't exist in Safari. The Buzz toggle
   hides itself rather than pretending.
-- **In-app QR scanning** - `BarcodeDetector` is Chromium-only. The camera-app
+- **In-app QR scanning**: `BarcodeDetector` is Chromium-only. The camera-app
   and typed-code routes cover everyone else.
-- **Audio** - starts on first tap, as every mobile browser requires.
-- **Offline** - the service worker precaches the shell, so a guest can load the
+- **Audio**: starts on first tap, as every mobile browser requires.
+- **Offline**: the service worker precaches the shell, so a guest can load the
   app and join with the network down. Only active over `http(s)`; bump `CACHE`
   in `sw.js` whenever shipping changed files, or returning visitors keep the old
   bundle.
-- **Multi-touch drawing** - the duo pad uses Pointer Events, supported everywhere
+- **Multi-touch drawing**: the drawing pad uses Pointer Events, supported everywhere
   modern. Without canvas 2D the pad degrades to blank-but-harmless.
 
 ## Licence

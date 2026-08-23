@@ -32,6 +32,7 @@ const MODULES = [
   'scan.js',
   'words.js',
   'sync.js',
+  'p2p.js',
   'share.js',
   'game.js',
 ];
