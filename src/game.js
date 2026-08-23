@@ -242,7 +242,7 @@ async function renderSaves() {
           <div class="meta">
             <div class="stitle">${label}</div>
             <div class="smeta">Round ${g.round}${g.rounds ? ' of ' + g.rounds : ''}
-              &middot; ${g.teams[0].score}–${g.teams[1].score}${kind}
+              &middot; ${g.teams[0].score}-${g.teams[1].score}${kind}
               &middot; ${when}</div>
           </div>
           <button class="resume" data-id="${g.id}">Resume</button>
@@ -758,7 +758,7 @@ async function wrapUp() {
   const standing =
     a.score === b.score
       ? `Level at ${a.score} each - a tie is a legitimate result.`
-      : `${leader().name} leads ${Math.max(a.score, b.score)}–${Math.min(a.score, b.score)}.`;
+      : `${leader().name} leads ${Math.max(a.score, b.score)}-${Math.min(a.score, b.score)}.`;
 
   const ok = await confirmSheet({
     title: 'Wrap up the game?',
