@@ -354,11 +354,10 @@ body.mode-guest #guest-done { display: flex; }
 body:not(.mode-synced) #show-invite { display: none; }
 
 /* ============================================================================
-   Duo pad - one phone, two artists
+   Drawing pad: shared on one phone, full screen per team on multi-device
    ========================================================================= */
 
 #duo-toggle { display: inline-block; }
-body.mode-guest #duo-toggle { display: none; }
 
 .padwrap { position: fixed; inset: 0; z-index: 35;
   background: var(--ink);
@@ -372,7 +371,8 @@ body.mode-guest #duo-toggle { display: none; }
   font-size: 32px; line-height: 1; letter-spacing: -.04em;
   font-variant-numeric: tabular-nums; min-width: 84px;
   transition: color .3s ease; }
-.padword { flex: 1; align-self: auto; text-align: center;
+.padtitle { font-family: var(--display); font-size: 15px; font-weight: 700;
+  color: rgba(247,244,236,.65); flex: 1; text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .padtools { display: flex; gap: 14px; flex: none; }
 

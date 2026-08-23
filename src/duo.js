@@ -1,21 +1,17 @@
 /**
- * duo.js - one phone, two artists.
+ * duo.js - shared or single-team touch drawing surface.
  *
- * The solo huddle assumes paper exists somewhere in the room. Sometimes it
- * doesn't. This turns the phone itself into the shared sheet: a full-screen
- * canvas split into two halves by a dashed line, with real multi-touch so two
- * fingers draw at once. Each artist's strokes take their half's colour (marker
- * red above the line, marker blue below), decided by where the stroke starts,
- * so crossing the line to steal space keeps your colour.
+ * Solo mode (one phone):
+ *   The canvas splits into two halves (Red top, Blue bottom) with multi-touch
+ *   so both artists draw on the shared screen simultaneously.
  *
- * Because both artists share one screen, "live updates" are free - this is the
- * one drawing surface that needs no network, no WebRTC, no anything. It is
- * deliberately an overlay: the clock keeps running underneath it, and the panic
- * veil still covers everything.
+ * Multi-device mode (phone per team):
+ *   Each team draws full-screen in their respective team color (Red on host,
+ *   Blue on guest).
  *
- * Graceful degradation: if canvas 2D is unavailable (some embedded webviews),
- * the buttons keep working and the surface simply stays blank rather than
- * throwing mid-party.
+ * In all modes, the secret word is deliberately not shown on the drawing pad
+ * so guessers in the room can look directly at the phone screen without seeing
+ * the answer.
  */
 
 const PAD_TOP_INK = '#FF4262';
@@ -29,7 +25,7 @@ const padPointers = new Map();
 let padCanvas = null;
 let padCtx = null;
 let padShown = false;
-let padGetWord = () => '';
+let padColorMode = 'split'; // 'split' | 'red' | 'blue'
 
 function padEl(id) {
   return document.getElementById(id);
@@ -40,6 +36,8 @@ export function duoPadIsOpen() {
 }
 
 function inkFor(y, height) {
+  if (padColorMode === 'red') return PAD_TOP_INK;
+  if (padColorMode === 'blue') return PAD_BOTTOM_INK;
   return y < height / 2 ? PAD_TOP_INK : PAD_BOTTOM_INK;
 }
 
@@ -49,7 +47,7 @@ function padPos(e) {
 }
 
 function drawDivider(width, height) {
-  if (!padCtx) {
+  if (!padCtx || padColorMode !== 'split') {
     return;
   }
   padCtx.save();
@@ -63,10 +61,17 @@ function drawDivider(width, height) {
   padCtx.restore();
 }
 
+function applyPadModeUI() {
+  const isSplit = padColorMode === 'split';
+  const topLabel = padEl('zlabel-top');
+  const bottomLabel = padEl('zlabel-bottom');
+  if (topLabel) topLabel.hidden = !isSplit;
+  if (bottomLabel) bottomLabel.hidden = !isSplit;
+}
+
 /**
  * Match the backing store to the element at device resolution.
- * Preserves the existing artwork across small viewport shifts (e.g. browser
- * address bar collapsing on scroll).
+ * Preserves the existing artwork across small viewport shifts.
  */
 function padLayout() {
   if (!padCtx || !padCanvas) {
@@ -130,9 +135,14 @@ function clearPad() {
   drawDivider(rect.width, rect.height);
 }
 
-export function openDuoPad() {
+export function openDuoPad({ colorMode = 'split', title = 'Drawing Sheet' } = {}) {
+  padColorMode = colorMode;
   padShown = true;
-  padEl('duo-pad').hidden = false;
+  const pad = padEl('duo-pad');
+  if (pad) pad.hidden = false;
+  const titleEl = padEl('pad-title');
+  if (titleEl) titleEl.textContent = title;
+  applyPadModeUI();
   requestAnimationFrame(padLayout);
 }
 
@@ -141,33 +151,22 @@ export function closeDuoPad() {
     return;
   }
   padShown = false;
-  padEl('duo-pad').hidden = true;
+  const pad = padEl('duo-pad');
+  if (pad) pad.hidden = true;
   padPointers.clear();
 }
 
-export function wireDuoPad({ getWord = () => '' } = {}) {
-  padGetWord = getWord;
+export function wireDuoPad() {
   padCanvas = padEl('pad-canvas');
   if (!padCanvas) {
     return;
   }
   padCtx = padCanvas.getContext ? padCanvas.getContext('2d') : null;
 
-  padEl('pad-clear').onclick = clearPad;
-  padEl('pad-done').onclick = closeDuoPad;
-
-  const wordBtn = padEl('pad-word');
-  wordBtn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    wordBtn.classList.add('showing');
-    wordBtn.textContent = padGetWord();
-  });
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => {
-    wordBtn.addEventListener(ev, () => {
-      wordBtn.classList.remove('showing');
-      wordBtn.textContent = 'Hold for the word';
-    });
-  });
+  const clearBtn = padEl('pad-clear');
+  if (clearBtn) clearBtn.onclick = clearPad;
+  const doneBtn = padEl('pad-done');
+  if (doneBtn) doneBtn.onclick = closeDuoPad;
 
   padCanvas.addEventListener('pointerdown', (e) => {
     if (!padCtx) {
@@ -176,13 +175,14 @@ export function wireDuoPad({ getWord = () => '' } = {}) {
     e.preventDefault();
     const p = padPos(e);
     const rect = padCanvas.getBoundingClientRect();
-    padPointers.set(e.pointerId, { ...p, color: inkFor(p.y, rect.height) });
+    const color = inkFor(p.y, rect.height);
+    padPointers.set(e.pointerId, { ...p, color });
     try {
       padCanvas.setPointerCapture(e.pointerId);
     } catch (err) {
       /* capture is a nicety; drawing works without it */
     }
-    padStroke(p, p, inkFor(p.y, rect.height));
+    padStroke(p, p, color);
   });
 
   padCanvas.addEventListener('pointermove', (e) => {
@@ -203,10 +203,8 @@ export function wireDuoPad({ getWord = () => '' } = {}) {
     });
   });
 
-  [padCanvas, wordBtn].forEach((el) => {
-    el.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-    });
+  padCanvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
   });
 
   window.addEventListener('resize', () => {

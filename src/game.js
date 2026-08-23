@@ -219,16 +219,23 @@ async function persist() {
   await store.set(SAVE_KEY, games.slice(0, MAX_SAVES));
 }
 
+async function clearCurrentSave() {
+  if (!S.id) return;
+  const games = ((await store.get(SAVE_KEY)) || []).filter((g) => g.id !== S.id);
+  await store.set(SAVE_KEY, games);
+}
+
 async function renderSaves() {
   const games = (await store.get(SAVE_KEY)) || [];
   const field = $('saves-field');
   if (!games.length) {
     field.hidden = true;
+    $('saves').innerHTML = '';
     return;
   }
   field.hidden = false;
 
-  $('saves').innerHTML = games
+  const rows = games
     .map((g) => {
       const d = new Date(g.at);
       const when =
@@ -251,6 +258,12 @@ async function renderSaves() {
     })
     .join('');
 
+  $('saves').innerHTML =
+    rows +
+    `<div style="text-align:center;margin-top:8px">
+      <button class="linkbtn" id="clear-all-saves">Clear all saved games</button>
+    </div>`;
+
   $('saves')
     .querySelectorAll('.resume')
     .forEach((b) => (b.onclick = () => resumeGame(b.dataset.id)));
@@ -262,7 +275,7 @@ async function renderSaves() {
         (b.onclick = async () => {
           const ok = await confirmSheet({
             title: 'Delete this game?',
-            body: `"${b.dataset.label}" goes for good - scores, round history and its used-word list. This can't be undone.`,
+            body: `"${b.dataset.label}" goes for good: scores, round history and its used-word list. This cannot be undone.`,
             yes: 'Delete it',
             no: 'Keep it',
           });
@@ -273,6 +286,22 @@ async function renderSaves() {
           toast('Game deleted');
         })
     );
+
+  const clearAllBtn = $('clear-all-saves');
+  if (clearAllBtn) {
+    clearAllBtn.onclick = async () => {
+      const ok = await confirmSheet({
+        title: 'Clear all saved games?',
+        body: 'All saved games in browser storage will be deleted permanently. This cannot be undone.',
+        yes: 'Clear all',
+        no: 'Keep them',
+      });
+      if (!ok) return;
+      await store.set(SAVE_KEY, []);
+      renderSaves();
+      toast('All saved games cleared');
+    };
+  }
 }
 
 async function resumeGame(id) {
@@ -749,6 +778,7 @@ function nextRound() {
 
 function endGame(champ, reason) {
   S.endReason = reason || '';
+  clearCurrentSave().catch(() => {});
   const other = S.teams[1 - S.teams.indexOf(champ)];
   const tie = champ.score === other.score;
 
@@ -795,7 +825,7 @@ async function wrapUp() {
   const [a, b] = S.teams;
   const standing =
     a.score === b.score
-      ? `Level at ${a.score} each - a tie is a legitimate result.`
+      ? `Level at ${a.score} each: a tie is a legitimate result.`
       : `${leader().name} leads ${Math.max(a.score, b.score)}-${Math.min(a.score, b.score)}.`;
 
   const ok = await confirmSheet({
@@ -810,6 +840,7 @@ async function wrapUp() {
 
   if (ok) {
     stopClock();
+    clearCurrentSave().catch(() => {});
     endGame(leader(), 'Wrapped up early.');
   } else if (live) {
     resumeClock();
@@ -1115,7 +1146,13 @@ function wireEvents() {
 
   $('duo-toggle').onclick = () => {
     blip(500, 0.06);
-    openDuoPad();
+    if (S.mode === 'solo') {
+      openDuoPad({ colorMode: 'split', title: 'Shared Drawing Pad' });
+    } else if (S.mode === 'host') {
+      openDuoPad({ colorMode: 'red', title: `${S.teams[0].name} Drawing Pad` });
+    } else {
+      openDuoPad({ colorMode: 'blue', title: `${S.teams[1].name} Drawing Pad` });
+    }
   };
 
   $('invite-done').onclick = () => toHandoff();
@@ -1252,7 +1289,7 @@ function registerServiceWorker() {
   initSetup();
   wireEvents();
   wireButtonHaptics();
-  wireDuoPad({ getWord: () => (S.card ? S.card.word : '') });
+  wireDuoPad();
   syncFeedbackLabels();
   applyMode();
   registerServiceWorker();

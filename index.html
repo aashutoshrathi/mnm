@@ -350,11 +350,11 @@
   <p class="sub">Tap anywhere when it's just the drawers looking.</p>
 </div>
 
-<!-- ==================== DUO PAD (shared drawing surface) ==================== -->
+<!-- ==================== DRAWING PAD ==================== -->
 <div class="padwrap" id="duo-pad" hidden>
   <div class="padbar">
     <span class="padclock" id="pad-clock">1:30</span>
-    <button class="peek padword" id="pad-word">Hold for the word</button>
+    <span class="padtitle" id="pad-title">Drawing Pad</span>
     <span class="padtools">
       <button class="linkbtn" id="pad-clear">Clear</button>
       <button class="linkbtn" id="pad-done">Done</button>
@@ -362,8 +362,8 @@
   </div>
   <div class="padstage">
     <canvas id="pad-canvas"></canvas>
-    <span class="zlabel zlabel--top">Red draws up here</span>
-    <span class="zlabel zlabel--bottom">Blue draws down here</span>
+    <span class="zlabel zlabel--top" id="zlabel-top">Red draws up here</span>
+    <span class="zlabel zlabel--bottom" id="zlabel-bottom">Blue draws down here</span>
   </div>
 </div>
 
