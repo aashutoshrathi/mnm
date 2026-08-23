@@ -453,6 +453,29 @@ await test('guests can review and edit their team name on join', async () => {
   guest.window.close();
 });
 
+await test('multi-device lobby and drawer readiness boxes display team presence', async () => {
+  const host = await boot();
+  pickSegment(host, 'seg-devices', 'host');
+  click(host, 'go');
+  assert.equal(active(host), 's-invite');
+  assert.ok(!$(host, 'lobby-box').hidden);
+  assert.match($(host, 'lobby-host-status').textContent, /Ready/);
+  const url = $(host, 'invite-url').textContent;
+
+  click(host, 'invite-done');
+  assert.equal(active(host), 's-handoff');
+  assert.ok(!$(host, 'host-ready-box').hidden);
+  assert.equal($(host, 'hr-host-btn').textContent, "I'm ready");
+
+  const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  assert.equal(active(guest), 's-guest');
+  assert.ok(!$(guest, 'guest-ready-box').hidden);
+  assert.equal($(guest, 'gr-my-btn').textContent, "I'm ready");
+
+  host.window.close();
+  guest.window.close();
+});
+
 await test('guests reaching the round cap see completion state and can step back', async () => {
   const host = await boot();
   pickSegment(host, 'seg-devices', 'host');

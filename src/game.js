@@ -440,6 +440,60 @@ function startNewGame() {
 
 /* ================================================================ invite & p2p */
 
+let hostReadyState = false;
+let guestReadyState = false;
+let countdownTimer = null;
+let guestInLobby = false;
+
+function triggerSynchronizedCountdown(onComplete) {
+  const overlay = $('countdown-overlay');
+  const num = $('cd-num');
+  if (!overlay || !num) {
+    onComplete();
+    return;
+  }
+
+  overlay.hidden = false;
+  let count = 3;
+  num.textContent = count;
+  blip(520, 0.08);
+
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    count--;
+    if (count > 0) {
+      num.textContent = count;
+      blip(520, 0.08);
+    } else if (count === 0) {
+      num.textContent = 'GO!';
+      blip(1040, 0.15);
+    } else {
+      clearInterval(countdownTimer);
+      overlay.hidden = true;
+      onComplete();
+    }
+  }, 1000);
+}
+
+function startHostSyncedRound() {
+  const r = roundFor(S.seed, S.diff, S.round);
+  S.theme = r.theme;
+  startRound({ tier: r.tier, pts: r.pts, word: r.word });
+  const endsAt = Date.now() + 3400 + S.len * 1000;
+  if (typeof sendP2P === 'function') {
+    sendP2P('START_COUNTDOWN', { round: S.round, endsAt, len: S.len });
+  }
+  triggerSynchronizedCountdown(() => {
+    S.endsAt = endsAt;
+    runClock();
+  });
+}
+
+function startGuestSyncedRound() {
+  startGuestRound();
+  triggerSynchronizedCountdown(() => {});
+}
+
 function handleP2PMessage(msg) {
   if (!msg || !msg.type) return;
 
@@ -447,9 +501,63 @@ function handleP2PMessage(msg) {
     case 'PEER_PING':
     case 'PEER_JOINED':
       if (isHost()) {
+        guestInLobby = true;
         const teamName = msg.name || S.teams[1].name || 'Team 2';
+        const lgName = $('lobby-guest-name');
+        if (lgName) lgName.textContent = teamName;
+        const lgStatus = $('lobby-guest-status');
+        if (lgStatus) {
+          lgStatus.textContent = '✓ Joined';
+          lgStatus.className = 'lobby-status ready';
+        }
         toast(`${teamName} connected to the room!`);
         blip(880, 0.1);
+        sendP2P('HOST_ACK', { name: S.teams[0].name });
+      }
+      break;
+
+    case 'HOST_ACK':
+      if (isGuest() && msg.name) {
+        S.teams[0].name = msg.name;
+        const oName = $('gr-other-name');
+        if (oName) oName.textContent = msg.name;
+      }
+      break;
+
+    case 'DRAWER_READY':
+      if (isHost() && msg.role === 'guest') {
+        guestReadyState = Boolean(msg.ready);
+        const statusEl = $('hr-guest-status');
+        if (statusEl) {
+          statusEl.textContent = guestReadyState ? '✓ Ready' : 'Waiting for drawer…';
+          statusEl.className = guestReadyState ? 'ready-status ready' : 'ready-status waiting';
+        }
+        if (hostReadyState && guestReadyState) {
+          startHostSyncedRound();
+        }
+      } else if (isGuest() && msg.role === 'host') {
+        hostReadyState = Boolean(msg.ready);
+        const statusEl = $('gr-other-status');
+        if (statusEl) {
+          statusEl.textContent = hostReadyState ? '✓ Ready' : 'Waiting for drawer…';
+          statusEl.className = hostReadyState ? 'ready-status ready' : 'ready-status waiting';
+        }
+        if (hostReadyState && guestReadyState) {
+          startGuestSyncedRound();
+        }
+      }
+      break;
+
+    case 'START_COUNTDOWN':
+      if (isGuest()) {
+        if (S.round !== msg.round) S.round = msg.round;
+        triggerSynchronizedCountdown(() => {
+          startGuestRound();
+          if (msg.endsAt) {
+            S.endsAt = msg.endsAt;
+            runClock();
+          }
+        });
       }
       break;
 
@@ -508,6 +616,8 @@ function handleP2PMessage(msg) {
         renderBoard($('board3'));
         const teamNameEl = $('guest-team-name');
         if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
+        const grMyName = $('gr-my-name');
+        if (grMyName) grMyName.textContent = S.teams[1].name;
         toast(`${msg.name} updated their team name`);
       }
       break;
@@ -525,6 +635,16 @@ function handleP2PMessage(msg) {
 
 function showInvite() {
   $('invite-code').textContent = formatJoinCode(S.code);
+
+  const lhName = $('lobby-host-name');
+  if (lhName) lhName.textContent = `${S.teams[0].name} (Host)`;
+  const lgName = $('lobby-guest-name');
+  if (lgName) lgName.textContent = S.teams[1].name;
+  const lgStatus = $('lobby-guest-status');
+  if (lgStatus) {
+    lgStatus.textContent = guestInLobby ? '✓ Joined' : 'Waiting for join…';
+    lgStatus.className = guestInLobby ? 'lobby-status ready' : 'lobby-status waiting';
+  }
 
   if (isHost() && S.code && typeof connectP2P === 'function') {
     connectP2P({ code: S.code, role: 'host', onMessage: handleP2PMessage });
@@ -557,25 +677,46 @@ function showInvite() {
 /* ============================================================= turn loop */
 
 function toHandoff() {
+  hostReadyState = false;
+  guestReadyState = false;
+
   const t = S.teams[S.picker];
   $('roundlabel').textContent = `Round ${S.round}${S.rounds ? ` of ${S.rounds}` : ''}`;
   $('turn-team').textContent = t.name;
   $('turn-swatch').style.background = t.color;
   $('theme-who').textContent = `${t.name} picks the theme`;
 
+  const hostReadyBox = $('host-ready-box');
+
   if (isSynced()) {
-    $('handoff-head').textContent = 'Everyone ready?';
+    $('handoff-head').textContent = 'Both drawers, ready?';
     $('handoff-sub').textContent =
-      'Each drawer holds their own phone. Check the sync code matches before you deal.';
-    $('reveal').textContent = 'Deal round ' + S.round;
+      'Each drawer confirms ready on their phone. When both are ready, the countdown begins together.';
+    $('reveal').textContent = 'Start round ' + S.round;
     $('sync-badge').hidden = false;
     $('sync-code').textContent = syncCode(S.seed, S.round);
+
+    if (hostReadyBox) {
+      hostReadyBox.hidden = false;
+      const hrHost = $('hr-host-name');
+      if (hrHost) hrHost.textContent = S.teams[0].name;
+      const hrGuest = $('hr-guest-name');
+      if (hrGuest) hrGuest.textContent = S.teams[1].name;
+      const hrHostBtn = $('hr-host-btn');
+      if (hrHostBtn) hrHostBtn.textContent = "I'm ready";
+      const hrGuestStatus = $('hr-guest-status');
+      if (hrGuestStatus) {
+        hrGuestStatus.textContent = 'Waiting for drawer…';
+        hrGuestStatus.className = 'ready-status waiting';
+      }
+    }
   } else {
     $('handoff-head').textContent = 'Both drawers, huddle up';
     $('handoff-sub').textContent =
       'One drawer from each team looks at the screen together. Everyone else: eyes off.';
-    $('reveal').textContent = "We're the drawers - deal us in";
+    $('reveal').textContent = "We're the drawers: deal us in";
     $('sync-badge').hidden = true;
+    if (hostReadyBox) hostReadyBox.hidden = true;
   }
 
   renderBoard($('board'));
@@ -1002,6 +1143,9 @@ function toGuestReady() {
   startBtn.textContent = 'Show the word and start';
   startBtn.onclick = startGuestRound;
 
+  hostReadyState = false;
+  guestReadyState = false;
+
   const r = roundFor(S.seed, S.diff, S.round);
   S.theme = r.theme;
   $('guest-round').textContent = `Round ${S.round}${S.rounds ? ` of ${S.rounds}` : ''}`;
@@ -1013,6 +1157,20 @@ function toGuestReady() {
   if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
   const teamDotEl = $('guest-team-dot');
   if (teamDotEl) teamDotEl.style.background = S.teams[1].color;
+
+  const grMyName = $('gr-my-name');
+  if (grMyName) grMyName.textContent = S.teams[1].name;
+  const grMyDot = $('gr-my-dot');
+  if (grMyDot) grMyDot.style.background = S.teams[1].color;
+  const grOtherName = $('gr-other-name');
+  if (grOtherName) grOtherName.textContent = S.teams[0].name;
+  const grMyBtn = $('gr-my-btn');
+  if (grMyBtn) grMyBtn.textContent = "I'm ready";
+  const grOtherStatus = $('gr-other-status');
+  if (grOtherStatus) {
+    grOtherStatus.textContent = 'Waiting for drawer…';
+    grOtherStatus.className = 'ready-status waiting';
+  }
 
   show('s-guest');
 }
@@ -1212,8 +1370,34 @@ const closeShare = () => $('share-modal').classList.remove('on');
 /* ================================================================ wiring */
 
 function wireEvents() {
+  const hrHostBtn = $('hr-host-btn');
+  if (hrHostBtn) {
+    hrHostBtn.onclick = () => {
+      hostReadyState = !hostReadyState;
+      hrHostBtn.textContent = hostReadyState ? '✓ Ready (waiting)' : "I'm ready";
+      if (typeof sendP2P === 'function') {
+        sendP2P('DRAWER_READY', { role: 'host', ready: hostReadyState, round: S.round });
+      }
+      if (hostReadyState && guestReadyState) {
+        startHostSyncedRound();
+      }
+    };
+  }
+
   $('reveal').onclick = () => {
-    if (isSynced()) return dealSyncedRound();
+    if (isSynced()) {
+      hostReadyState = true;
+      if (hrHostBtn) hrHostBtn.textContent = '✓ Ready (waiting)';
+      if (typeof sendP2P === 'function') {
+        sendP2P('DRAWER_READY', { role: 'host', ready: true, round: S.round });
+      }
+      if (hostReadyState && guestReadyState) {
+        startHostSyncedRound();
+      } else {
+        startHostSyncedRound();
+      }
+      return;
+    }
     dealThemes();
     show('s-theme');
   };
@@ -1312,7 +1496,7 @@ function wireEvents() {
       await navigator.clipboard.writeText(text);
       toast('Copied');
     } catch (e) {
-      toast('Copy not available - read it out instead');
+      toast('Copy not available: read it out instead');
     }
   };
   $('show-invite').onclick = showInvite;
@@ -1329,7 +1513,32 @@ function wireEvents() {
   $('join-scan').onclick = beginScan;
   $('scan-cancel').onclick = stopScanner;
 
-  $('guest-start').onclick = startGuestRound;
+  const grMyBtn = $('gr-my-btn');
+  if (grMyBtn) {
+    grMyBtn.onclick = () => {
+      guestReadyState = !guestReadyState;
+      grMyBtn.textContent = guestReadyState ? '✓ Ready (waiting)' : "I'm ready";
+      if (typeof sendP2P === 'function') {
+        sendP2P('DRAWER_READY', { role: 'guest', ready: guestReadyState, round: S.round });
+      }
+      if (hostReadyState && guestReadyState) {
+        startGuestSyncedRound();
+      }
+    };
+  }
+
+  $('guest-start').onclick = () => {
+    guestReadyState = true;
+    if (grMyBtn) grMyBtn.textContent = '✓ Ready (waiting)';
+    if (typeof sendP2P === 'function') {
+      sendP2P('DRAWER_READY', { role: 'guest', ready: true, round: S.round });
+    }
+    if (hostReadyState && guestReadyState) {
+      startGuestSyncedRound();
+    } else {
+      startGuestRound();
+    }
+  };
   $('guest-leave').onclick = leaveGame;
   $('guest-back').onclick = () => nudgeRound(-1);
   $('guest-fwd').onclick = () => nudgeRound(1);

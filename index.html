@@ -167,10 +167,22 @@
       <span class="turnbadge sync" id="sync-badge" hidden>Sync code <b id="sync-code">A7F2</b></span>
       <h2 id="handoff-head">Both drawers, huddle up</h2>
       <p class="sub" id="handoff-sub">One drawer from each team looks at the screen together. Everyone else: eyes off.</p>
+
+      <div class="ready-box" id="host-ready-box" hidden>
+        <div class="ready-head">Drawer readiness</div>
+        <div class="ready-row">
+          <span class="ready-team"><span class="team-dot" style="background:var(--red)"></span> <span id="hr-host-name">Red</span></span>
+          <button class="btn btn--sm btn--yellow" id="hr-host-btn">I'm ready</button>
+        </div>
+        <div class="ready-row">
+          <span class="ready-team"><span class="team-dot" style="background:var(--blue)"></span> <span id="hr-guest-name">Blue</span></span>
+          <span class="ready-status waiting" id="hr-guest-status">Waiting for drawer…</span>
+        </div>
+      </div>
     </div>
 
     <div class="stack">
-      <button class="btn" id="reveal" data-haptic="20">We're the drawers - deal us in</button>
+      <button class="btn" id="reveal" data-haptic="20">We're the drawers: deal us in</button>
       <button class="btn btn--ghost btn--sm" id="pause">Pause and save for later</button>
       <div style="text-align:center"><button class="linkbtn" id="show-invite">Show the join code again</button></div>
     </div>
@@ -241,6 +253,18 @@
       <p class="code" id="invite-code">K7M3 QP2X</p>
     </div>
 
+    <div class="lobby-box" id="lobby-box">
+      <div class="lobby-head">Room lobby</div>
+      <div class="lobby-row">
+        <span class="lobby-team"><span class="team-dot" style="background:var(--red)"></span> <span id="lobby-host-name">Red (Host)</span></span>
+        <span class="lobby-status ready" id="lobby-host-status">✓ Ready</span>
+      </div>
+      <div class="lobby-row">
+        <span class="lobby-team"><span class="team-dot" style="background:var(--blue)"></span> <span id="lobby-guest-name">Blue</span></span>
+        <span class="lobby-status waiting" id="lobby-guest-status">Waiting for join…</span>
+      </div>
+    </div>
+
     <p class="sub" id="invite-qr-note" style="margin-top:16px"></p>
     <p class="sub urlline" id="invite-url"></p>
 
@@ -248,10 +272,10 @@
       <span class="eyebrow">How the other phones join</span>
       <button class="info" aria-expanded="false" aria-label="About joining">i</button>
     </div>
-    <p class="hint">Fastest: point the built-in camera app at the code - it opens the game already joined. Otherwise open this same page on the other phone, tap "Join a game on this phone" and type the eight characters. Nothing is sent anywhere; both phones just derive the same rounds from the same number.</p>
+    <p class="hint">Fastest: point the built-in camera app at the code: it opens the game already joined. Otherwise open this same page on the other phone, tap "Join a game on this phone" and type the eight characters.</p>
 
     <div class="stack mt">
-      <button class="btn btn--yellow" id="invite-done" data-haptic="20">Everyone's in - play</button>
+      <button class="btn btn--yellow" id="invite-done" data-haptic="20">Start game</button>
     </div>
   </section>
 
@@ -313,6 +337,18 @@
             <button class="btn btn--sm btn--yellow" id="gr-save">Save name</button>
             <button class="btn btn--ghost btn--sm" id="gr-cancel">Cancel</button>
           </div>
+        </div>
+      </div>
+
+      <div class="ready-box" id="guest-ready-box">
+        <div class="ready-head">Drawer readiness</div>
+        <div class="ready-row">
+          <span class="ready-team"><span class="team-dot" id="gr-my-dot" style="background:var(--blue)"></span> <span id="gr-my-name">Blue</span></span>
+          <button class="btn btn--sm btn--yellow" id="gr-my-btn">I'm ready</button>
+        </div>
+        <div class="ready-row">
+          <span class="ready-team"><span class="team-dot" style="background:var(--red)"></span> <span id="gr-other-name">Red</span></span>
+          <span class="ready-status waiting" id="gr-other-status">Waiting for drawer…</span>
         </div>
       </div>
 
@@ -396,6 +432,11 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="countdown-overlay" id="countdown-overlay" hidden>
+  <p class="cd-label" id="cd-label">Both drawers ready!</p>
+  <div class="cd-num" id="cd-num">3</div>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
