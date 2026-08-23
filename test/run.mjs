@@ -1,5 +1,5 @@
 /**
- * test/run.mjs — no framework, no dependencies.
+ * test/run.mjs - no framework, no dependencies.
  *
  *   node test/run.mjs
  *

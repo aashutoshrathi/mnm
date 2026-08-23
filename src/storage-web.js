@@ -1,5 +1,5 @@
 /**
- * storage-web.js — localStorage + sessionStorage adapters.
+ * storage-web.js - localStorage + sessionStorage adapters.
  *
  * NOT imported by the default build historically; now wired in game.js ahead
  * of the memory fallback so saved games survive closing the tab in the wild.

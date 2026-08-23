@@ -1,5 +1,5 @@
 /**
- * feedback.js — sound and haptics.
+ * feedback.js - sound and haptics.
  *
  * Haptics note: navigator.vibrate is supported on Android browsers and not on
  * iOS Safari, where every call is a silent no-op. There is no web API that

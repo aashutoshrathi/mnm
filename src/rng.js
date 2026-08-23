@@ -1,5 +1,5 @@
 /**
- * rng.js — all randomness in the app funnels through here.
+ * rng.js - all randomness in the app funnels through here.
  *
  * Two shapes, for two jobs:
  *

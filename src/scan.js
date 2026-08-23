@@ -1,5 +1,5 @@
 /**
- * scan.js — reading a join code off another phone's screen.
+ * scan.js - reading a join code off another phone's screen.
  *
  * Uses the platform's BarcodeDetector, which is Chromium-only. Rather than
  * shipping a decoder to paper over that, the join screen always offers manual
@@ -7,7 +7,7 @@
  * about as long as lining up a camera. Scanning is the fast path, not the only
  * path.
  *
- * The other fast path needs no code here at all — the invite QR encodes a URL,
+ * The other fast path needs no code here at all - the invite QR encodes a URL,
  * so a guest can point their built-in camera app at it and land straight in the
  * game.
  */
@@ -92,9 +92,9 @@ export async function startScanner(video, onResult) {
 /** Camera failures are common and each one needs a different suggestion. */
 function cameraErrorMessage(err) {
   const name = err && err.name;
-  if (name === 'NotAllowedError') return 'Camera permission was declined — type the code instead';
+  if (name === 'NotAllowedError') return 'Camera permission was declined - type the code instead';
   if (name === 'NotFoundError') return 'No camera found on this device';
   if (name === 'NotReadableError') return 'The camera is busy in another app';
   if (name === 'SecurityError') return 'The camera needs a secure connection (https)';
-  return 'Could not open the camera — type the code instead';
+  return 'Could not open the camera - type the code instead';
 }
