@@ -1,11 +1,11 @@
 /**
  * p2p.js - serverless real-time room synchronization for multi-device play.
  *
- * Combines local BroadcastChannel (for same-device tabs/windows) and a public
- * WebSocket MQTT broker (for cross-device phones across the internet) to provide
+ * Combines local BroadcastChannel (for same-device tabs/windows) and public
+ * WebSocket MQTT brokers (for cross-device phones across the internet) to provide
  * zero-config real-time synchronization between Host and Guest devices:
  *
- *   1. Automatic 1-tap round start (Host taps start -> Guest clock starts).
+ *   1. Synchronized Ready Lobbies and Round-Ready countdowns.
  *   2. Real-time drawing strokes streamed to the Opponent Sideboard.
  *   3. Synchronized score, round transitions, team renames, and wrap-up.
  *
@@ -13,15 +13,46 @@
  * deterministic offline play with zero errors.
  */
 
-const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
+const BROKER_URLS = [
+  'wss://broker.emqx.io:8084/mqtt',
+  'wss://broker.hivemq.com:8884/mqtt',
+];
 
 let p2pWs = null;
 let p2pChannel = null;
 let p2pRoomTopic = '';
 let p2pRole = 'host';
 let p2pConnected = false;
+let p2pBrokerIndex = 0;
+let p2pReconnectTimer = null;
 let p2pMessageHandler = () => {};
 let p2pStatusHandler = () => {};
+
+function encodeVarInt(num) {
+  const bytes = [];
+  do {
+    let digit = num % 128;
+    num = Math.floor(num / 128);
+    if (num > 0) digit = digit | 0x80;
+    bytes.push(digit);
+  } while (num > 0);
+  return new Uint8Array(bytes);
+}
+
+function decodeVarInt(buf, offset = 1) {
+  let multiplier = 1;
+  let value = 0;
+  let byteCount = 0;
+  let digit = 0;
+  do {
+    if (offset + byteCount >= buf.length) break;
+    digit = buf[offset + byteCount];
+    value += (digit & 127) * multiplier;
+    multiplier *= 128;
+    byteCount++;
+  } while ((digit & 128) !== 0 && byteCount < 4);
+  return { value, length: byteCount };
+}
 
 function encodeConnect(id) {
   const protocol = [0x00, 0x04, 0x4d, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, 0x3c];
@@ -36,10 +67,11 @@ function encodeConnect(id) {
   remaining.set(varHeader, 0);
   remaining.set(payload, varHeader.length);
 
-  const packet = new Uint8Array(2 + remaining.length);
+  const lenBytes = encodeVarInt(remaining.length);
+  const packet = new Uint8Array(1 + lenBytes.length + remaining.length);
   packet[0] = 0x10;
-  packet[1] = remaining.length;
-  packet.set(remaining, 2);
+  packet.set(lenBytes, 1);
+  packet.set(remaining, 1 + lenBytes.length);
   return packet;
 }
 
@@ -56,10 +88,11 @@ function encodeSubscribe(topic) {
   remaining.set(packetId, 0);
   remaining.set(payload, packetId.length);
 
-  const packet = new Uint8Array(2 + remaining.length);
+  const lenBytes = encodeVarInt(remaining.length);
+  const packet = new Uint8Array(1 + lenBytes.length + remaining.length);
   packet[0] = 0x82;
-  packet[1] = remaining.length;
-  packet.set(remaining, 2);
+  packet.set(lenBytes, 1);
+  packet.set(remaining, 1 + lenBytes.length);
   return packet;
 }
 
@@ -75,10 +108,11 @@ function encodePublish(topic, message) {
   remaining.set(varHeader, 0);
   remaining.set(mBytes, varHeader.length);
 
-  const packet = new Uint8Array(2 + remaining.length);
+  const lenBytes = encodeVarInt(remaining.length);
+  const packet = new Uint8Array(1 + lenBytes.length + remaining.length);
   packet[0] = 0x30;
-  packet[1] = remaining.length;
-  packet.set(remaining, 2);
+  packet.set(lenBytes, 1);
+  packet.set(remaining, 1 + lenBytes.length);
   return packet;
 }
 
@@ -112,12 +146,11 @@ export function sendP2P(type, payload = {}) {
   }
 }
 
-let p2pReconnectTimer = null;
-
 function setupWebSocket(clientId) {
   if (typeof WebSocket === 'undefined' || !p2pRoomTopic) return;
   try {
-    p2pWs = new WebSocket(MQTT_BROKER, ['mqtt']);
+    const brokerUrl = BROKER_URLS[p2pBrokerIndex % BROKER_URLS.length];
+    p2pWs = new WebSocket(brokerUrl, ['mqtt']);
     p2pWs.binaryType = 'arraybuffer';
 
     p2pWs.onopen = () => {
@@ -136,7 +169,8 @@ function setupWebSocket(clientId) {
         sendP2P('PEER_PING', { role: p2pRole });
       } else if (type === 3) {
         /* PUBLISH received */
-        let offset = 2;
+        const dec = decodeVarInt(buf, 1);
+        let offset = 1 + dec.length;
         const topicLen = (buf[offset] << 8) | buf[offset + 1];
         offset += 2 + topicLen;
         const payloadStr = new TextDecoder().decode(buf.subarray(offset));
@@ -160,7 +194,8 @@ function setupWebSocket(clientId) {
       p2pStatusHandler({ connected: false });
       if (p2pRoomTopic) {
         clearTimeout(p2pReconnectTimer);
-        p2pReconnectTimer = setTimeout(() => setupWebSocket(clientId), 2500);
+        p2pBrokerIndex++;
+        p2pReconnectTimer = setTimeout(() => setupWebSocket(clientId), 2000);
       }
     };
   } catch (err) {
