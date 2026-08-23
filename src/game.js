@@ -1149,9 +1149,19 @@ function wireEvents() {
     if (S.mode === 'solo') {
       openDuoPad({ colorMode: 'split', title: 'Shared Drawing Pad' });
     } else if (S.mode === 'host') {
-      openDuoPad({ colorMode: 'red', title: `${S.teams[0].name} Drawing Pad` });
+      openDuoPad({
+        colorMode: 'red',
+        title: `${S.teams[0].name} Drawing Pad`,
+        opponentTitle: `${S.teams[1].name} (Other Team)`,
+        opponentColor: S.teams[1].color,
+      });
     } else {
-      openDuoPad({ colorMode: 'blue', title: `${S.teams[1].name} Drawing Pad` });
+      openDuoPad({
+        colorMode: 'blue',
+        title: `${S.teams[1].name} Drawing Pad`,
+        opponentTitle: `${S.teams[0].name} (Other Team)`,
+        opponentColor: S.teams[0].color,
+      });
     }
   };
 

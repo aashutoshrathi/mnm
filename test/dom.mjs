@@ -397,6 +397,7 @@ await test('the drawing pad opens over the draw screen and closes', async () => 
   assert.ok(!$(dom, 'duo-pad').hidden, 'pad should be visible');
   assert.equal($(dom, 'pad-clock').textContent, $(dom, 'clock').textContent, 'pad mirrors the clock');
   assert.match($(dom, 'pad-title').textContent, /Drawing Pad/);
+  assert.ok($(dom, 'pad-sideboard').hidden, 'sideboard is hidden in solo split mode');
 
   click(dom, 'pad-clear');
   click(dom, 'pad-done');
@@ -407,7 +408,7 @@ await test('the drawing pad opens over the draw screen and closes', async () => 
   dom.window.close();
 });
 
-await test('guests can open the drawing pad to draw for their team', async () => {
+await test('guests can open the drawing pad to draw for their team with opponent sideboard', async () => {
   const host = await boot();
   pickSegment(host, 'seg-devices', 'host');
   click(host, 'go');
@@ -421,6 +422,8 @@ await test('guests can open the drawing pad to draw for their team', async () =>
   click(guest, 'duo-toggle');
   assert.ok(!$(guest, 'duo-pad').hidden, 'pad should open on guest phone');
   assert.match($(guest, 'pad-title').textContent, /Drawing Pad/);
+  assert.ok(!$(guest, 'pad-sideboard').hidden, 'opponent sideboard should be visible on guest');
+  assert.match($(guest, 'sideboard-title').textContent, /Foxes|Other Team/);
   click(guest, 'pad-done');
   assert.ok($(guest, 'duo-pad').hidden, 'Done should close guest pad');
 

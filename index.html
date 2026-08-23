@@ -360,10 +360,20 @@
       <button class="linkbtn" id="pad-done">Done</button>
     </span>
   </div>
-  <div class="padstage">
+  <div class="padstage" id="pad-stage">
     <canvas id="pad-canvas"></canvas>
     <span class="zlabel zlabel--top" id="zlabel-top">Red draws up here</span>
     <span class="zlabel zlabel--bottom" id="zlabel-bottom">Blue draws down here</span>
+
+    <div class="sideboard" id="pad-sideboard" hidden>
+      <div class="sideboard-header">
+        <span class="sideboard-dot" id="sideboard-dot"></span>
+        <span class="sideboard-title" id="sideboard-title">Opponent Board</span>
+      </div>
+      <div class="sideboard-body">
+        <canvas id="sideboard-canvas" class="sideboard-canvas"></canvas>
+      </div>
+    </div>
   </div>
 </div>
 
