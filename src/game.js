@@ -221,8 +221,9 @@ async function persist() {
 }
 
 async function clearCurrentSave() {
-  if (!S.id) return;
-  const games = ((await store.get(SAVE_KEY)) || []).filter((g) => g.id !== S.id);
+  if (!S.id || isGuest()) return;
+  const targetId = S.id;
+  const games = ((await store.get(SAVE_KEY)) || []).filter((g) => g.id !== targetId);
   await store.set(SAVE_KEY, games);
 }
 
