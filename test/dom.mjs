@@ -403,6 +403,31 @@ await test('guests never see the duo pad toggle', async () => {
   guest.window.close();
 });
 
+await test('guests reaching the round cap see completion state and can step back', async () => {
+  const host = await boot();
+  pickSegment(host, 'seg-devices', 'host');
+  pickSegment(host, 'seg-rounds', '5');
+  click(host, 'go');
+  const url = $(host, 'invite-url').textContent;
+
+  const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  for (let r = 1; r <= 5; r++) {
+    click(guest, 'guest-start');
+    click(guest, 'guest-done');
+  }
+
+  assert.equal(active(guest), 's-guest');
+  assert.match($(guest, 'guest-head').textContent, /Game complete/);
+  assert.equal($(guest, 'guest-start').textContent, 'Leave game');
+
+  click(guest, 'guest-back');
+  assert.match($(guest, 'guest-head').textContent, /You're a drawer/);
+  assert.equal($(guest, 'guest-start').textContent, 'Show the word and start');
+
+  host.window.close();
+  guest.window.close();
+});
+
 console.log(`\n${'─'.repeat(52)}`);
 console.log(`${passed} passed, ${failed} failed`);
 if (failed) {

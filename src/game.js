@@ -561,6 +561,41 @@ function dealSyncedRound() {
   startRound({ tier: r.tier, pts: r.pts, word: r.word });
 }
 
+/* =============================================================== wake lock */
+
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+    try {
+      if (!wakeLock) {
+        const lock = await navigator.wakeLock.request('screen');
+        wakeLock = lock;
+        lock.addEventListener('release', () => {
+          if (wakeLock === lock) {
+            wakeLock = null;
+          }
+        });
+      }
+    } catch (e) {
+      /* wake lock is best effort (e.g. low battery mode or background tab) */
+      wakeLock = null;
+    }
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    const lock = wakeLock;
+    wakeLock = null;
+    try {
+      lock.release().catch(() => {});
+    } catch (e) {
+      /* no-op */
+    }
+  }
+}
+
 /* ================================================================== clock */
 
 const formatClock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -590,6 +625,7 @@ function runClock() {
   let nextTock = 0;
   let high = true;
   paintClock();
+  requestWakeLock();
 
   S.ticker = setInterval(() => {
     const left = paintClock();
@@ -616,6 +652,7 @@ function stopClock() {
   clearInterval(S.ticker);
   S.ticker = null;
   S.pausedMs = null;
+  releaseWakeLock();
   closeDuoPad();
 }
 
@@ -624,6 +661,7 @@ function pauseClock() {
   clearInterval(S.ticker);
   S.ticker = null;
   S.pausedMs = Math.max(0, S.endsAt - Date.now());
+  releaseWakeLock();
 }
 
 function resumeClock() {
@@ -781,6 +819,29 @@ async function wrapUp() {
 /* ============================================================= guest mode */
 
 function toGuestReady() {
+  const overCap = Boolean(S.rounds && S.round > S.rounds);
+  const head = $('guest-head');
+  const sub = $('guest-sub');
+  const startBtn = $('guest-start');
+
+  if (overCap) {
+    $('guest-round').textContent = `Round ${S.rounds} of ${S.rounds}`;
+    $('guest-sync').textContent = 'DONE';
+    if (head) head.textContent = 'Game complete';
+    if (sub) sub.textContent = 'All rounds have been played. Check the host phone for the final tally and podium.';
+    $('guest-theme').textContent = '🏁 All done';
+    $('guest-worth').textContent = 'Game over';
+    startBtn.textContent = 'Leave game';
+    startBtn.onclick = leaveGame;
+    show('s-guest');
+    return;
+  }
+
+  if (head) head.textContent = "You're a drawer";
+  if (sub) sub.textContent = 'Check the sync code matches the host\'s. If it doesn\'t, step this phone\'s round to line up.';
+  startBtn.textContent = 'Show the word and start';
+  startBtn.onclick = startGuestRound;
+
   const r = roundFor(S.seed, S.diff, S.round);
   S.theme = r.theme;
   $('guest-round').textContent = `Round ${S.round}${S.rounds ? ` of ${S.rounds}` : ''}`;
@@ -864,10 +925,10 @@ async function submitJoin(raw) {
     buzz([40, 60, 40]);
     return;
   }
-  await enterGuestMode(encodeJoinCode(payload), payload, 1);
+  await enterGuestMode(encodeJoinCode(payload), payload, 1, true);
 }
 
-async function enterGuestMode(code, payload, round) {
+async function enterGuestMode(code, payload, round, playSound = true) {
   stopScanner();
   Object.assign(S, {
     mode: 'guest',
@@ -883,7 +944,7 @@ async function enterGuestMode(code, payload, round) {
   resetReplay(S.seed, S.diff);
   applyMode();
   await saveLastJoin();
-  blip(760, 0.09);
+  if (playSound) blip(760, 0.09);
   toGuestReady();
   toast(`Joined ${formatJoinCode(code)}`);
 }
@@ -917,7 +978,7 @@ async function joinFromHash() {
   try {
     const payload = decodeJoinCode(code);
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    await enterGuestMode(encodeJoinCode(payload), payload, 1);
+    await enterGuestMode(encodeJoinCode(payload), payload, 1, false);
     return true;
   } catch (err) {
     toast(err.message);
@@ -1159,11 +1220,19 @@ function wireEvents() {
   };
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopScanner();
-    else if ($('s-draw').classList.contains('is-active') && S.ticker) paintClock();
+    if (document.hidden) {
+      stopScanner();
+      releaseWakeLock();
+    } else if ($('s-draw').classList.contains('is-active') && S.ticker) {
+      paintClock();
+      requestWakeLock();
+    }
   });
 
-  window.addEventListener('pagehide', stopScanner);
+  window.addEventListener('pagehide', () => {
+    stopScanner();
+    releaseWakeLock();
+  });
 }
 
 /** Offline shell. Only meaningful over http(s); a no-op from the filesystem. */

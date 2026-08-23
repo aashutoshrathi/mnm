@@ -119,6 +119,15 @@ input[type=text]:focus { border-color: rgba(247,244,236,.4); outline: none; }
   padding: 12px 14px; border-radius: 0 11px 11px 0; margin-bottom: 12px; }
 .hint.on { display: block; animation: rise .2s ease both; }
 
+.more-settings { margin-bottom: 20px; }
+.more-toggle { cursor: pointer; font-size: 13.5px; font-weight: 700; color: rgba(247,244,236,.58);
+  text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(247,244,236,.22);
+  list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; user-select: none; }
+.more-toggle::-webkit-details-marker { display: none; }
+.more-toggle::after { content: '▾'; font-size: 11px; transition: transform .2s ease; }
+.more-settings[open] .more-toggle::after { transform: rotate(180deg); }
+.more-content { margin-top: 14px; padding-top: 4px; animation: rise .2s ease both; }
+
 /* ----------------------------------------------------------- saved games */
 
 .save { display: flex; align-items: center; gap: 12px; background: var(--ink-2);
@@ -354,7 +363,8 @@ body.mode-guest #duo-toggle { display: none; }
 .padwrap { position: fixed; inset: 0; z-index: 35;
   background: var(--ink);
   display: flex; flex-direction: column; gap: 12px;
-  padding: 16px 18px calc(18px + env(safe-area-inset-bottom)); }
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .padwrap[hidden] { display: none; }
 
 .padbar { display: flex; align-items: center; gap: 14px; }
@@ -372,7 +382,8 @@ body.mode-guest #duo-toggle { display: none; }
   background-image:
     linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
-  background-size: 26px 26px; }
+  background-size: 26px 26px;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .padstage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
 
 .zlabel { position: absolute; left: 0; right: 0; text-align: center;

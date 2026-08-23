@@ -9,7 +9,7 @@
  * Bump CACHE when shipping. Old caches are dropped on activate.
  */
 
-const CACHE = 'marker-mayhem-v3';
+const CACHE = 'marker-mayhem-v4';
 
 const SHELL = [
   './',
