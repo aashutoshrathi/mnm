@@ -146,7 +146,7 @@ src/
   feedback.js           blips, ticks, haptics
   share.js              1080x1350 result card
   storage.js            save adapter with in-memory fallback
-  storage-web.js        localStorage adapter, opt-in (see Persistence)
+  storage-web.js        localStorage/sessionStorage adapters
   styles.css
 test/
   run.mjs               45 unit tests, zero dependencies
@@ -199,15 +199,15 @@ round 7 has the same history as one that played through. Verified over a
 
 ## Persistence
 
-The default build stores saves through a host-provided `window.storage`, falling
-back to memory. Sandboxed iframes can throw on `localStorage` access, so it isn't
-assumed.
+The default build stores saves through a host-provided `window.storage` where
+available, then `localStorage`, then `sessionStorage`, falling back to memory.
+Sandboxed iframes can throw on storage access, so each one is probed before use.
 
-Self-hosting? Swap one line in `game.js` for durable saves:
+Self-hosting? The chain above is already wired in `game.js`; to drop the
+host adapter, change one line:
 
 ```js
-import { webAdapter } from './storage-web.js';
-const store = createStore([webAdapter, ADAPTERS.memory]);
+const store = createStore([webAdapter, sessionAdapter, ADAPTERS.memory]);
 ```
 
 ## Browser notes

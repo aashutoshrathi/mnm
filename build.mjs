@@ -25,6 +25,7 @@ const MODULES = [
   'feedback.js',
   'tally.js',
   'storage.js',
+  'storage-web.js',
   'joincode.js',
   'qr.js',
   'scan.js',

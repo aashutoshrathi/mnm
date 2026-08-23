@@ -17,7 +17,7 @@
 import { ALL_THEMES, THEMES, mashupWord, poolSize, TIER_LADDER } from './words.js';
 import { pick, shuffle } from './rng.js';
 import { createStore, ADAPTERS } from './storage.js';
-// Deploying this yourself? See storage-web.js for durable saves.
+import { webAdapter, sessionAdapter } from './storage-web.js';
 import { blip, tock, buzz, settings, wireButtonHaptics, hapticsSupported } from './feedback.js';
 import { tallySVG } from './tally.js';
 import { renderShareCard, exportCard, fontsReady } from './share.js';
@@ -53,7 +53,7 @@ const TEAM_HEX = ['#FF4262', '#3D9BFF'];
 
 const ANY_THEME = { id: 'any', name: 'Anything goes', icon: '🎯', any: true };
 
-const store = createStore([ADAPTERS.host, ADAPTERS.memory]);
+const store = createStore([ADAPTERS.host, webAdapter, sessionAdapter, ADAPTERS.memory]);
 
 /* ================================================================== state */
 

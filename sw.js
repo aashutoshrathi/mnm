@@ -9,7 +9,7 @@
  * Bump CACHE when shipping. Old caches are dropped on activate.
  */
 
-const CACHE = 'marker-mayhem-v1';
+const CACHE = 'marker-mayhem-v2';
 
 const SHELL = [
   './',
@@ -23,6 +23,7 @@ const SHELL = [
   './src/tally.js',
   './src/feedback.js',
   './src/storage.js',
+  './src/storage-web.js',
   './src/share.js',
   './src/sync.js',
   './src/joincode.js',
