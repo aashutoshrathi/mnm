@@ -15,6 +15,8 @@
  * the answer.
  */
 
+import { sendP2P } from './p2p.js';
+
 const PAD_TOP_INK = '#FF4262';
 const PAD_BOTTOM_INK = '#3D9BFF';
 const PAD_DIVIDER = 'rgba(247,244,236,.28)';
@@ -307,7 +309,7 @@ export function wireDuoPad() {
           const sb = { x: msg.bNorm.x * rect.width, y: msg.bNorm.y * rect.height };
           sideboardStroke(sa, sb, msg.color);
         } else if (msg.type === 'clear') {
-          clearSideboard();
+          clearIncomingSideboard(msg.from);
         }
       };
     } catch (err) {

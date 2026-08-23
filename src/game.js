@@ -33,6 +33,7 @@ import {
 import { encodeQR, qrToSVG } from './qr.js';
 import { startScanner, scanAvailable } from './scan.js';
 import { wireDuoPad, openDuoPad, closeDuoPad } from './duo.js';
+import { connectP2P, disconnectP2P, sendP2P } from './p2p.js';
 
 /* ============================================================== constants */
 
@@ -793,7 +794,7 @@ function dealThemes() {
       return `
         <button class="theme${t.any ? ' any' : ''}" data-i="${i}">
           <span class="ic">${t.icon}</span>
-          <span><span class="tt">${t.name}</span><span class="td">${note}</span></span>
+          <span style="min-width:0;flex:1"><span class="tt">${t.name}</span><span class="td">${note}</span></span>
         </button>`;
     })
     .join('');

@@ -19,10 +19,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
-/** Dependency order matters: a module must appear after everything it uses. */
 const MODULES = [
   'rng.js',
   'feedback.js',
+  'p2p.js',
   'duo.js',
   'tally.js',
   'storage.js',
@@ -32,7 +32,6 @@ const MODULES = [
   'scan.js',
   'words.js',
   'sync.js',
-  'p2p.js',
   'share.js',
   'game.js',
 ];
