@@ -431,6 +431,28 @@ await test('guests can open the drawing pad to draw for their team with opponent
   guest.window.close();
 });
 
+await test('guests can review and edit their team name on join', async () => {
+  const host = await boot();
+  pickSegment(host, 'seg-devices', 'host');
+  click(host, 'go');
+  const url = $(host, 'invite-url').textContent;
+
+  const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  assert.equal(active(guest), 's-guest');
+  assert.equal($(guest, 'guest-team-name').textContent, 'Blue');
+
+  click(guest, 'guest-rename-toggle');
+  assert.ok(!$(guest, 'guest-renamer').hidden, 'guest renamer should expand');
+  $(guest, 'gr-name').value = 'Speedy Otters';
+  click(guest, 'gr-save');
+
+  assert.ok($(guest, 'guest-renamer').hidden, 'guest renamer should close after save');
+  assert.equal($(guest, 'guest-team-name').textContent, 'Speedy Otters');
+
+  host.window.close();
+  guest.window.close();
+});
+
 await test('guests reaching the round cap see completion state and can step back', async () => {
   const host = await boot();
   pickSegment(host, 'seg-devices', 'host');

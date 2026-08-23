@@ -295,6 +295,27 @@
       <span class="turnbadge sync">Sync code <b id="guest-sync">A7F2</b></span>
       <h2 id="guest-head">You're a drawer</h2>
       <p class="sub" id="guest-sub">Check the sync code matches the host's. If it doesn't, step this phone's round to line up.</p>
+
+      <div class="guest-team-box" id="guest-team-box">
+        <div class="guest-team-row">
+          <span class="guest-team-badge">
+            <span class="guest-team-dot" id="guest-team-dot"></span>
+            <span>Team: <b id="guest-team-name">Blue</b></span>
+          </span>
+          <button class="linkbtn" id="guest-rename-toggle">Edit team name</button>
+        </div>
+        <div class="guest-renamer" id="guest-renamer" hidden>
+          <div class="field" style="margin-top:8px">
+            <label for="gr-name">Custom team name</label>
+            <input type="text" id="gr-name" maxlength="20" placeholder="Enter team name">
+          </div>
+          <div class="cluster" style="margin-top:8px">
+            <button class="btn btn--sm btn--yellow" id="gr-save">Save name</button>
+            <button class="btn btn--ghost btn--sm" id="gr-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
       <div class="preview">
         <span class="pv-theme" id="guest-theme">🐘 Animals</span>
         <span class="pv-worth" id="guest-worth">Worth 2</span>

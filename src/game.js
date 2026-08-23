@@ -879,6 +879,12 @@ function toGuestReady() {
   $('guest-sync').textContent = syncCode(S.seed, S.round);
   $('guest-theme').textContent = `${r.theme.icon} ${r.theme.name}`;
   $('guest-worth').textContent = `Worth ${r.pts}`;
+
+  const teamNameEl = $('guest-team-name');
+  if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
+  const teamDotEl = $('guest-team-dot');
+  if (teamDotEl) teamDotEl.style.background = S.teams[1].color;
+
   show('s-guest');
 }
 
@@ -977,7 +983,7 @@ async function enterGuestMode(code, payload, round, playSound = true) {
   await saveLastJoin();
   if (playSound) blip(760, 0.09);
   toGuestReady();
-  toast(`Joined ${formatJoinCode(code)}`);
+  toast(`Joined ${formatJoinCode(code)}. Review and edit your team name below if you want to.`);
 }
 
 function stopScanner() {
@@ -1193,6 +1199,40 @@ function wireEvents() {
   $('guest-leave').onclick = leaveGame;
   $('guest-back').onclick = () => nudgeRound(-1);
   $('guest-fwd').onclick = () => nudgeRound(1);
+
+  const grToggle = $('guest-rename-toggle');
+  if (grToggle) {
+    grToggle.onclick = () => {
+      const ren = $('guest-renamer');
+      const isHidden = ren.hidden;
+      ren.hidden = !isHidden;
+      if (!ren.hidden) {
+        $('gr-name').value = S.teams[1].name;
+        $('gr-name').focus();
+      }
+    };
+  }
+
+  const grSave = $('gr-save');
+  if (grSave) {
+    grSave.onclick = () => {
+      const val = $('gr-name').value.trim();
+      if (val) {
+        S.teams[1].name = val;
+      }
+      const teamNameEl = $('guest-team-name');
+      if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
+      $('guest-renamer').hidden = true;
+      toast(`Team name set to ${S.teams[1].name}`);
+    };
+  }
+
+  const grCancel = $('gr-cancel');
+  if (grCancel) {
+    grCancel.onclick = () => {
+      $('guest-renamer').hidden = true;
+    };
+  }
 
   $('pause').onclick = async () => {
     await persist();
