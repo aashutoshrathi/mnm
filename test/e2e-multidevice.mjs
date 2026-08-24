@@ -148,9 +148,8 @@ click(guest, 'duo-toggle');
 assert.ok(!$(host, 'duo-pad').hidden, 'Host drawing pad should be open');
 assert.ok(!$(guest, 'duo-pad').hidden, 'Guest drawing pad should be open');
 
-// Test peek word chip on drawing pad
-click(host, 'pad-word-chip');
-assert.equal($(host, 'pad-word-text').textContent, hostWord, 'Host pad-word-chip reveals secret word on tap');
+// Assert peek word chip is not present on drawing pad per privacy requirements
+assert.equal($(host, 'pad-word-chip'), null, 'Word is not peekable on drawing pad');
 
 // Test tool switching
 click(host, 'pad-tool-eraser');
@@ -248,3 +247,4 @@ host.window.close();
 guest.window.close();
 
 console.log('\nALL 12 MULTI-DEVICE END-TO-END STEPS PASSED SUCCESSFULLY.');
+process.exit(0);

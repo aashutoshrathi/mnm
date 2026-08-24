@@ -4,15 +4,16 @@
  * Solo mode (one phone):
  *   The canvas splits into two halves (Red top, Blue bottom) with multi-touch
  *   so both artists draw on the shared screen simultaneously.
+ *   Each team has its own independent toolbar: Brush sizes, Pen/Eraser tools,
+ *   color palettes, team-isolated Undo, and team-isolated Clear buttons.
  *
  * Multi-device mode (phone per team):
  *   Each team draws on a major full-screen board in their team color (Red on host,
  *   Blue on guest), while a compact read-only sideboard displays the opponent's
- *   live strokes in real time via BroadcastChannel and WebSocket MQTT relay.
+ *   live strokes in real time with exact aspect ratio and scaled stroke widths.
+ *   Direct in-pad scoring buttons allow players to claim points or mark "Other Team Guessed".
  *
- * In all modes, the secret word is deliberately not shown on the drawing pad
- * so guessers in the room can look directly at the phone screen without seeing
- * the answer.
+ * In all modes, the secret word is deliberately not shown on the drawing pad.
  */
 
 import { sendP2P } from './p2p.js';
@@ -24,7 +25,7 @@ const PAD_DIVIDER = 'rgba(247,244,236,.28)';
 const PEN_SIZES = { sm: 2.5, md: 5, lg: 9 };
 const ERASER_SIZES = { sm: 16, md: 26, lg: 40 };
 
-/** pointerId -> {x, y, color, width, tool, segments}; multi-touch supported. */
+/** pointerId -> {x, y, team, color, width, tool, strokeId, stroke} */
 const padPointers = new Map();
 
 let padCanvas = null;
@@ -33,36 +34,69 @@ let sideboardCanvas = null;
 let sideboardCtx = null;
 let padShown = false;
 let padColorMode = 'split'; // 'split' | 'red' | 'blue'
-let streamChannel = null;
 
-let currentTool = 'pen'; // 'pen' | 'eraser'
-let currentSize = 'md'; // 'sm' | 'md' | 'lg'
-let currentColor = 'team'; // 'team' | hex string
+// Single / Multi-device active tools
+let singleTool = 'pen';
+let singleSize = 'md';
+let singleColor = 'team';
+
+// Solo split team tools (independent per team)
+const redState = {
+  tool: 'pen',
+  size: 'md',
+  color: '#FF4262',
+};
+
+const blueState = {
+  tool: 'pen',
+  size: 'md',
+  color: '#3D9BFF',
+};
 
 const strokeHistory = [];
 const opponentStrokeHistory = [];
 
+let onScoreCallback = null;
+
 function padEl(id) {
   return document.getElementById(id);
+}
+
+export function setPadScoreCallback(fn) {
+  onScoreCallback = fn;
 }
 
 export function duoPadIsOpen() {
   return padShown;
 }
 
-function resolveColor(y, height) {
-  if (currentTool === 'eraser') return 'eraser';
-  if (currentColor !== 'team') return currentColor;
-  if (padColorMode === 'red') return PAD_TOP_INK;
-  if (padColorMode === 'blue') return PAD_BOTTOM_INK;
-  return y < height / 2 ? PAD_TOP_INK : PAD_BOTTOM_INK;
+function resolveSoloTeam(y, height) {
+  return y < height / 2 ? 'red' : 'blue';
 }
 
-function resolveWidth() {
-  return currentTool === 'eraser' ? ERASER_SIZES[currentSize] : PEN_SIZES[currentSize];
+function resolveStrokeSettings(team, y, height) {
+  if (padColorMode === 'split') {
+    const isRed = team === 'red' || (y < height / 2);
+    const state = isRed ? redState : blueState;
+    const tool = state.tool;
+    const width = tool === 'eraser' ? ERASER_SIZES[state.size] : PEN_SIZES[state.size];
+    const color = tool === 'eraser' ? 'eraser' : state.color;
+    return { team: isRed ? 'red' : 'blue', tool, width, color };
+  }
+
+  const tool = singleTool;
+  const width = tool === 'eraser' ? ERASER_SIZES[singleSize] : PEN_SIZES[singleSize];
+  let color = singleColor;
+  if (tool === 'eraser') {
+    color = 'eraser';
+  } else if (singleColor === 'team') {
+    color = padColorMode === 'red' ? PAD_TOP_INK : PAD_BOTTOM_INK;
+  }
+  return { team: padColorMode, tool, width, color };
 }
 
 function padPos(e) {
+  if (!padCanvas) return { x: 0, y: 0 };
   const rect = padCanvas.getBoundingClientRect();
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
@@ -82,12 +116,63 @@ function drawDivider(width, height) {
   padCtx.restore();
 }
 
-function applyPadModeUI(opponentTitle = '', opponentColor = '') {
+function applyPadModeUI(opponentTitle = '', opponentColor = '', team0Name = 'Red', team1Name = 'Blue') {
   const isSplit = padColorMode === 'split';
   const topLabel = padEl('zlabel-top');
   const bottomLabel = padEl('zlabel-bottom');
-  if (topLabel) topLabel.hidden = !isSplit;
-  if (bottomLabel) bottomLabel.hidden = !isSplit;
+  if (topLabel) {
+    topLabel.hidden = !isSplit;
+    topLabel.textContent = `${team0Name} draws up here`;
+  }
+  if (bottomLabel) {
+    bottomLabel.hidden = !isSplit;
+    bottomLabel.textContent = `${team1Name} draws down here`;
+  }
+
+  // Toggle Solo Split controls vs Single/Multi-device controls
+  const redControls = padEl('pad-red-controls');
+  const blueControls = padEl('pad-blue-controls');
+  const singleControls = padEl('pad-single-controls');
+  const scoreActions = padEl('pad-score-actions');
+
+  if (redControls) redControls.hidden = !isSplit;
+  if (blueControls) blueControls.hidden = !isSplit;
+  if (singleControls) singleControls.hidden = isSplit;
+  if (scoreActions) scoreActions.hidden = false;
+
+  const redBarLabel = padEl('red-bar-label');
+  if (redBarLabel) redBarLabel.textContent = team0Name;
+  const blueBarLabel = padEl('blue-bar-label');
+  if (blueBarLabel) blueBarLabel.textContent = team1Name;
+
+  // Set up in-pad score buttons
+  const myTeamBtn = padEl('pad-btn-myteam');
+  const otherTeamBtn = padEl('pad-btn-otherteam');
+
+  if (myTeamBtn && otherTeamBtn) {
+    if (isSplit) {
+      myTeamBtn.textContent = `${team0Name} Got It!`;
+      myTeamBtn.style.background = PAD_TOP_INK;
+      myTeamBtn.style.color = '#FFFFFF';
+      otherTeamBtn.textContent = `${team1Name} Got It!`;
+      otherTeamBtn.style.background = PAD_BOTTOM_INK;
+      otherTeamBtn.style.color = '#12142A';
+    } else if (padColorMode === 'red') {
+      myTeamBtn.textContent = `${team0Name} Got It!`;
+      myTeamBtn.style.background = PAD_TOP_INK;
+      myTeamBtn.style.color = '#FFFFFF';
+      otherTeamBtn.textContent = 'Other Team Guessed';
+      otherTeamBtn.style.background = 'rgba(247, 244, 236, 0.16)';
+      otherTeamBtn.style.color = '#FFFFFF';
+    } else {
+      myTeamBtn.textContent = `${team1Name} Got It!`;
+      myTeamBtn.style.background = PAD_BOTTOM_INK;
+      myTeamBtn.style.color = '#12142A';
+      otherTeamBtn.textContent = 'Other Team Guessed';
+      otherTeamBtn.style.background = 'rgba(247, 244, 236, 0.16)';
+      otherTeamBtn.style.color = '#FFFFFF';
+    }
+  }
 
   const swatchTeam = padEl('swatch-team');
   if (swatchTeam) {
@@ -107,7 +192,7 @@ function applyPadModeUI(opponentTitle = '', opponentColor = '') {
       const titleEl = padEl('sideboard-title');
       const dotEl = padEl('sideboard-dot');
       if (titleEl) {
-        titleEl.textContent = opponentTitle || (padColorMode === 'red' ? 'Blue Team' : 'Red Team');
+        titleEl.textContent = opponentTitle || (padColorMode === 'red' ? team1Name : team0Name);
       }
       if (dotEl) {
         dotEl.style.background = opponentColor || (padColorMode === 'red' ? PAD_BOTTOM_INK : PAD_TOP_INK);
@@ -155,6 +240,10 @@ function redrawSideboardCanvas() {
   const rect = sideboardCanvas.getBoundingClientRect();
   sideboardCtx.clearRect(0, 0, rect.width, rect.height);
 
+  const scaleRatio = padCanvas && padCanvas.getBoundingClientRect().width > 0
+    ? rect.width / padCanvas.getBoundingClientRect().width
+    : 0.35;
+
   for (const s of opponentStrokeHistory) {
     if (!s || !s.segments || s.segments.length === 0) continue;
     sideboardCtx.save();
@@ -165,7 +254,7 @@ function redrawSideboardCanvas() {
       sideboardCtx.globalCompositeOperation = 'source-over';
       sideboardCtx.strokeStyle = s.color;
     }
-    sideboardCtx.lineWidth = Math.max(1.5, s.width * 0.4);
+    sideboardCtx.lineWidth = Math.max(1.5, s.width * scaleRatio);
     sideboardCtx.lineCap = 'round';
     sideboardCtx.lineJoin = 'round';
 
@@ -183,10 +272,7 @@ function redrawSideboardCanvas() {
   }
 }
 
-/**
- * Match the backing store to the element at device resolution.
- * Preserves the existing artwork across small viewport shifts.
- */
+/** Match backing stores to element layout and synchronize aspect ratios */
 function padLayout() {
   if (!padCtx || !padCanvas) {
     return;
@@ -195,6 +281,13 @@ function padLayout() {
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(1, Math.round(rect.width * dpr));
   const h = Math.max(1, Math.round(rect.height * dpr));
+
+  // Sync sideboard aspect ratio to main pad stage
+  const sideBody = padEl('sideboard-body');
+  if (sideBody && rect.width > 0 && rect.height > 0) {
+    sideBody.style.aspectRatio = `${rect.width} / ${rect.height}`;
+  }
+
   if (padCanvas.width === w && padCanvas.height === h) {
     sideboardLayout();
     return;
@@ -279,23 +372,22 @@ function padStroke(a, b, color, width, tool = 'pen', strokeId = '') {
     if (tool === 'eraser' && padColorMode === 'split') {
       drawDivider(rect.width, rect.height);
     }
-    if (rect.width > 0 && rect.height > 0) {
+    if (rect.width > 0 && rect.height > 0 && padColorMode !== 'split') {
       const aNorm = { x: a.x / rect.width, y: a.y / rect.height };
       const bNorm = { x: b.x / rect.width, y: b.y / rect.height };
       queueStroke(aNorm, bNorm, color, width, tool, strokeId);
-      if (streamChannel) {
-        try {
-          streamChannel.postMessage({ type: 'stroke', from: padColorMode, aNorm, bNorm, color, width, tool, id: strokeId });
-        } catch (err) {}
-      }
     }
   }
 }
 
 function sideboardStroke(a, b, color, width = 4, tool = 'pen') {
-  if (!sideboardCtx) {
+  if (!sideboardCtx || !sideboardCanvas) {
     return;
   }
+  const scaleRatio = padCanvas && padCanvas.getBoundingClientRect().width > 0
+    ? sideboardCanvas.getBoundingClientRect().width / padCanvas.getBoundingClientRect().width
+    : 0.35;
+
   sideboardCtx.save();
   if (tool === 'eraser') {
     sideboardCtx.globalCompositeOperation = 'destination-out';
@@ -304,7 +396,7 @@ function sideboardStroke(a, b, color, width = 4, tool = 'pen') {
     sideboardCtx.globalCompositeOperation = 'source-over';
     sideboardCtx.strokeStyle = color;
   }
-  sideboardCtx.lineWidth = Math.max(1.5, width * 0.4);
+  sideboardCtx.lineWidth = Math.max(1.5, width * scaleRatio);
   sideboardCtx.lineCap = 'round';
   sideboardCtx.lineJoin = 'round';
   sideboardCtx.beginPath();
@@ -375,7 +467,53 @@ export function renderIncomingBatch(from, pts = []) {
   }
 }
 
+/** Undo last stroke for Red in solo split mode */
+export function undoRed() {
+  for (let i = strokeHistory.length - 1; i >= 0; i--) {
+    if (strokeHistory[i].team === 'red') {
+      strokeHistory.splice(i, 1);
+      break;
+    }
+  }
+  redrawPadCanvas();
+}
+
+/** Undo last stroke for Blue in solo split mode */
+export function undoBlue() {
+  for (let i = strokeHistory.length - 1; i >= 0; i--) {
+    if (strokeHistory[i].team === 'blue') {
+      strokeHistory.splice(i, 1);
+      break;
+    }
+  }
+  redrawPadCanvas();
+}
+
+/** Clear all strokes for Red in solo split mode */
+export function clearRed() {
+  for (let i = strokeHistory.length - 1; i >= 0; i--) {
+    if (strokeHistory[i].team === 'red') {
+      strokeHistory.splice(i, 1);
+    }
+  }
+  redrawPadCanvas();
+}
+
+/** Clear all strokes for Blue in solo split mode */
+export function clearBlue() {
+  for (let i = strokeHistory.length - 1; i >= 0; i--) {
+    if (strokeHistory[i].team === 'blue') {
+      strokeHistory.splice(i, 1);
+    }
+  }
+  redrawPadCanvas();
+}
+
 export function undoPad() {
+  if (padColorMode === 'split') {
+    undoRed();
+    return;
+  }
   if (strokeFlushTimer) {
     clearTimeout(strokeFlushTimer);
     strokeFlushTimer = null;
@@ -387,11 +525,6 @@ export function undoPad() {
   if (typeof sendP2P === 'function') {
     sendP2P('UNDO', { from: padColorMode });
   }
-  if (streamChannel) {
-    try {
-      streamChannel.postMessage({ type: 'undo', from: padColorMode });
-    } catch (err) {}
-  }
 }
 
 export function renderIncomingUndo(from) {
@@ -402,7 +535,12 @@ export function renderIncomingUndo(from) {
   redrawSideboardCanvas();
 }
 
-function clearPad() {
+export function clearPad() {
+  if (padColorMode === 'split') {
+    clearRed();
+    clearBlue();
+    return;
+  }
   if (strokeFlushTimer) {
     clearTimeout(strokeFlushTimer);
     strokeFlushTimer = null;
@@ -417,12 +555,6 @@ function clearPad() {
 
   if (typeof sendP2P === 'function') {
     sendP2P('CLEAR', { from: padColorMode });
-  }
-
-  if (streamChannel) {
-    try {
-      streamChannel.postMessage({ type: 'clear', from: padColorMode });
-    } catch (err) {}
   }
 }
 
@@ -464,30 +596,19 @@ export function getCurrentStrokes() {
   return JSON.parse(JSON.stringify(strokeHistory));
 }
 
-let currentSecretWord = '';
-let peekTimeout = null;
-
 export function openDuoPad({
   colorMode = 'split',
   opponentTitle = '',
   opponentColor = '',
-  secretWord = '',
+  team0Name = 'Red',
+  team1Name = 'Blue',
 } = {}) {
   padColorMode = colorMode;
   padShown = true;
-  currentSecretWord = secretWord || '';
   const pad = padEl('duo-pad');
   if (pad) pad.hidden = false;
 
-  const wordChip = padEl('pad-word-chip');
-  const wordText = padEl('pad-word-text');
-  if (wordChip && wordText) {
-    wordChip.classList.remove('showing');
-    wordText.textContent = 'Peek word';
-    wordChip.hidden = !currentSecretWord;
-  }
-
-  applyPadModeUI(opponentTitle, opponentColor);
+  applyPadModeUI(opponentTitle, opponentColor, team0Name, team1Name);
   requestAnimationFrame(() => {
     padLayout();
     sideboardLayout();
@@ -516,79 +637,128 @@ export function wireDuoPad() {
     sideboardCtx = sideboardCanvas.getContext ? sideboardCanvas.getContext('2d') : null;
   }
 
-  if (typeof BroadcastChannel !== 'undefined' && !streamChannel) {
-    try {
-      streamChannel = new BroadcastChannel('mnm-duo-stream');
-      streamChannel.onmessage = (e) => {
-        const msg = e.data;
-        if (!msg || msg.from === padColorMode) return;
-
-        if (msg.type === 'stroke' && sideboardCanvas && sideboardCtx) {
-          const rect = sideboardCanvas.getBoundingClientRect();
-          const sa = { x: msg.aNorm.x * rect.width, y: msg.aNorm.y * rect.height };
-          const sb = { x: msg.bNorm.x * rect.width, y: msg.bNorm.y * rect.height };
-          sideboardStroke(sa, sb, msg.color, msg.width, msg.tool);
-
-          const strokeId = msg.id;
-          const lastOpponentStroke = opponentStrokeHistory[opponentStrokeHistory.length - 1];
-          if (lastOpponentStroke && strokeId && lastOpponentStroke.id === strokeId) {
-            lastOpponentStroke.segments.push({ aNorm: msg.aNorm, bNorm: msg.bNorm });
-          } else {
-            opponentStrokeHistory.push({
-              id: strokeId,
-              tool: msg.tool,
-              color: msg.color,
-              width: msg.width,
-              segments: [{ aNorm: msg.aNorm, bNorm: msg.bNorm }],
-            });
-          }
-        } else if (msg.type === 'undo') {
-          renderIncomingUndo(msg.from);
-        } else if (msg.type === 'clear') {
-          clearIncomingSideboard(msg.from);
-        }
-      };
-    } catch (err) {
-      streamChannel = null;
-    }
-  }
-
+  // Multi-device Single Team Tool Controls
   const penBtn = padEl('pad-tool-pen');
   const eraserBtn = padEl('pad-tool-eraser');
   if (penBtn && eraserBtn) {
     penBtn.onclick = () => {
-      currentTool = 'pen';
+      singleTool = 'pen';
       penBtn.classList.add('is-active');
       eraserBtn.classList.remove('is-active');
     };
     eraserBtn.onclick = () => {
-      currentTool = 'eraser';
+      singleTool = 'eraser';
       eraserBtn.classList.add('is-active');
       penBtn.classList.remove('is-active');
     };
   }
 
-  const sizeBtns = document.querySelectorAll('.pad-size-btn');
+  const sizeBtns = document.querySelectorAll('.pad-size-btn:not([data-team])');
   sizeBtns.forEach((btn) => {
     btn.onclick = () => {
       sizeBtns.forEach((b) => b.classList.remove('is-active'));
       btn.classList.add('is-active');
-      currentSize = btn.dataset.size || 'md';
+      singleSize = btn.dataset.size || 'md';
     };
   });
 
-  const swatches = document.querySelectorAll('.pad-color-swatch');
+  const swatches = document.querySelectorAll('.pad-color-swatch:not([data-team])');
   swatches.forEach((swatch) => {
     swatch.onclick = () => {
       swatches.forEach((s) => s.classList.remove('is-active'));
       swatch.classList.add('is-active');
-      currentColor = swatch.dataset.color || 'team';
-      currentTool = 'pen';
+      singleColor = swatch.dataset.color || 'team';
+      singleTool = 'pen';
       if (penBtn) penBtn.classList.add('is-active');
       if (eraserBtn) eraserBtn.classList.remove('is-active');
     };
   });
 
+  // Solo Split Red Controls
+  const redPen = padEl('red-tool-pen');
+  const redEraser = padEl('red-tool-eraser');
+  if (redPen && redEraser) {
+    redPen.onclick = () => {
+      redState.tool = 'pen';
+      redPen.classList.add('is-active');
+      redEraser.classList.remove('is-active');
+    };
+    redEraser.onclick = () => {
+      redState.tool = 'eraser';
+      redEraser.classList.add('is-active');
+      redPen.classList.remove('is-active');
+    };
+  }
+
+  const redSizeBtns = document.querySelectorAll('.pad-size-btn[data-team="red"]');
+  redSizeBtns.forEach((btn) => {
+    btn.onclick = () => {
+      redSizeBtns.forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      redState.size = btn.dataset.size || 'md';
+    };
+  });
+
+  const redSwatches = document.querySelectorAll('.pad-color-swatch[data-team="red"]');
+  redSwatches.forEach((swatch) => {
+    swatch.onclick = () => {
+      redSwatches.forEach((s) => s.classList.remove('is-active'));
+      swatch.classList.add('is-active');
+      redState.color = swatch.dataset.color || '#FF4262';
+      redState.tool = 'pen';
+      if (redPen) redPen.classList.add('is-active');
+      if (redEraser) redEraser.classList.remove('is-active');
+    };
+  });
+
+  const redUndo = padEl('red-undo');
+  if (redUndo) redUndo.onclick = undoRed;
+  const redClear = padEl('red-clear');
+  if (redClear) redClear.onclick = clearRed;
+
+  // Solo Split Blue Controls
+  const bluePen = padEl('blue-tool-pen');
+  const blueEraser = padEl('blue-tool-eraser');
+  if (bluePen && blueEraser) {
+    bluePen.onclick = () => {
+      blueState.tool = 'pen';
+      bluePen.classList.add('is-active');
+      blueEraser.classList.remove('is-active');
+    };
+    blueEraser.onclick = () => {
+      blueState.tool = 'eraser';
+      blueEraser.classList.add('is-active');
+      bluePen.classList.remove('is-active');
+    };
+  }
+
+  const blueSizeBtns = document.querySelectorAll('.pad-size-btn[data-team="blue"]');
+  blueSizeBtns.forEach((btn) => {
+    btn.onclick = () => {
+      blueSizeBtns.forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      blueState.size = btn.dataset.size || 'md';
+    };
+  });
+
+  const blueSwatches = document.querySelectorAll('.pad-color-swatch[data-team="blue"]');
+  blueSwatches.forEach((swatch) => {
+    swatch.onclick = () => {
+      blueSwatches.forEach((s) => s.classList.remove('is-active'));
+      swatch.classList.add('is-active');
+      blueState.color = swatch.dataset.color || '#3D9BFF';
+      blueState.tool = 'pen';
+      if (bluePen) bluePen.classList.add('is-active');
+      if (blueEraser) blueEraser.classList.remove('is-active');
+    };
+  });
+
+  const blueUndo = padEl('blue-undo');
+  if (blueUndo) blueUndo.onclick = undoBlue;
+  const blueClear = padEl('blue-clear');
+  if (blueClear) blueClear.onclick = clearBlue;
+
+  // Global / Single Actions
   const undoBtn = padEl('pad-undo');
   if (undoBtn) undoBtn.onclick = undoPad;
 
@@ -597,20 +767,30 @@ export function wireDuoPad() {
   const doneBtn = padEl('pad-done');
   if (doneBtn) doneBtn.onclick = closeDuoPad;
 
-  const wordChip = padEl('pad-word-chip');
-  const wordText = padEl('pad-word-text');
-  if (wordChip && wordText) {
-    wordChip.onclick = () => {
-      clearTimeout(peekTimeout);
-      const showing = wordChip.classList.toggle('showing');
-      if (showing && currentSecretWord) {
-        wordText.textContent = currentSecretWord;
-        peekTimeout = setTimeout(() => {
-          wordChip.classList.remove('showing');
-          wordText.textContent = 'Peek word';
-        }, 3500);
-      } else {
-        wordText.textContent = 'Peek word';
+  // In-Pad Score Action Buttons
+  const myTeamBtn = padEl('pad-btn-myteam');
+  if (myTeamBtn) {
+    myTeamBtn.onclick = () => {
+      if (typeof onScoreCallback === 'function') {
+        onScoreCallback('mine');
+      }
+    };
+  }
+
+  const otherTeamBtn = padEl('pad-btn-otherteam');
+  if (otherTeamBtn) {
+    otherTeamBtn.onclick = () => {
+      if (typeof onScoreCallback === 'function') {
+        onScoreCallback('other');
+      }
+    };
+  }
+
+  const giveUpBtn = padEl('pad-btn-giveup');
+  if (giveUpBtn) {
+    giveUpBtn.onclick = () => {
+      if (typeof onScoreCallback === 'function') {
+        onScoreCallback('nobody');
       }
     };
   }
@@ -623,9 +803,8 @@ export function wireDuoPad() {
       e.preventDefault();
       const p = padPos(e);
       const rect = padCanvas.getBoundingClientRect();
-      const color = resolveColor(p.y, rect.height);
-      const width = resolveWidth();
-      const tool = currentTool;
+      const team = padColorMode === 'split' ? resolveSoloTeam(p.y, rect.height) : padColorMode;
+      const settings = resolveStrokeSettings(team, p.y, rect.height);
       const strokeId = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
 
       const aNorm = rect.width > 0 && rect.height > 0 ? { x: p.x / rect.width, y: p.y / rect.height } : { x: 0, y: 0 };
@@ -633,19 +812,29 @@ export function wireDuoPad() {
 
       const currentStroke = {
         id: strokeId,
-        tool,
-        color,
-        width,
+        team: settings.team,
+        tool: settings.tool,
+        color: settings.color,
+        width: settings.width,
         segments: [{ aNorm, bNorm }],
       };
 
-      padPointers.set(e.pointerId, { ...p, color, width, tool, strokeId, stroke: currentStroke });
+      padPointers.set(e.pointerId, {
+        ...p,
+        team: settings.team,
+        color: settings.color,
+        width: settings.width,
+        tool: settings.tool,
+        strokeId,
+        stroke: currentStroke,
+      });
+
       try {
         padCanvas.setPointerCapture(e.pointerId);
       } catch (err) {
         /* capture is a nicety; drawing works without it */
       }
-      padStroke(p, p, color, width, tool, strokeId);
+      padStroke(p, p, settings.color, settings.width, settings.tool, strokeId);
     });
 
     padCanvas.addEventListener('pointermove', (e) => {
@@ -694,4 +883,5 @@ export function wireDuoPad() {
     }
   });
 }
+
 

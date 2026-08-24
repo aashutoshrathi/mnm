@@ -393,12 +393,20 @@ body:not(.mode-synced) #show-invite { display: none; }
    Drawing pad: shared on one phone, full screen per team on multi-device
    ========================================================================= */
 
-#duo-toggle { display: inline-block; }
+#duo-toggle { display: inline-block; }.cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cluster .btn {
+  flex: 1;
+}
 
-.padwrap { position: fixed; inset: 0; z-index: 35;
+.padwrap {
+  position: fixed; inset: 0; z-index: 35;
   background: var(--ink);
-  display: flex; flex-direction: column; gap: 12px;
-  padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
   -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .padwrap[hidden] { display: none; }
 
@@ -416,46 +424,65 @@ body:not(.mode-synced) #show-invite { display: none; }
   line-height: 1;
   letter-spacing: -.04em;
   font-variant-numeric: tabular-nums;
-  min-width: 64px;
+  min-width: 60px;
   transition: color .3s ease;
 }
 
-.pad-word-chip {
-  background: rgba(247, 244, 236, 0.08);
-  border: 1px solid rgba(247, 244, 236, 0.14);
-  color: rgba(247, 244, 236, 0.85);
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 6px 12px;
-  border-radius: 20px;
-  cursor: pointer;
-  display: inline-flex;
+.pad-score-actions {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-  user-select: none;
-  -webkit-user-select: none;
-  max-width: 200px;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
 }
-.pad-word-chip:hover {
-  background: rgba(247, 244, 236, 0.15);
-  color: var(--paper);
-}
-.pad-word-chip:active {
-  transform: scale(0.96);
-}
-.pad-word-chip.showing {
+.pad-score-actions[hidden] { display: none; }
+.pad-btn-myteam {
   background: var(--yellow);
   color: var(--ink);
-  border-color: var(--yellow);
-  font-family: var(--display);
   font-weight: 800;
-}
-.pad-word-text {
+  padding: 8px 14px;
+  font-size: 13.5px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+.pad-btn-otherteam {
+  background: rgba(247, 244, 236, 0.16);
+  color: var(--chalk);
+  border: 1px solid rgba(247, 244, 236, 0.24);
+  font-weight: 700;
+  padding: 8px 14px;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.pad-btn-giveup {
+  padding: 8px 10px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.pad-solo-top-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pad-solo-top-controls[hidden] { display: none; }
+.pad-single-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pad-single-controls[hidden] { display: none; }
+
+.padbar--bottom {
+  padding-top: 6px;
+  border-top: 1px solid rgba(247, 244, 236, 0.08);
+}
+.padbar--bottom[hidden] { display: none; }
+.pad-team-tag {
+  font-size: 13px;
+  letter-spacing: .02em;
+  padding-right: 4px;
 }
 
 .pad-control-group {
@@ -587,7 +614,8 @@ body:not(.mode-synced) #show-invite { display: none; }
   top: 14px;
   right: 14px;
   width: 140px;
-  background: rgba(16, 15, 19, 0.88);
+  max-width: 34vw;
+  background: rgba(16, 15, 19, 0.9);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1.5px solid rgba(247, 244, 236, 0.18);
@@ -627,7 +655,8 @@ body:not(.mode-synced) #show-invite { display: none; }
 
 .sideboard-body {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 9 / 16;
+  max-height: 240px;
   background: var(--ink);
   border: 1px solid rgba(247, 244, 236, 0.08);
   border-radius: 8px;

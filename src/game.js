@@ -48,6 +48,7 @@ import {
   openDuoPad,
   closeDuoPad,
   resetDuoPad,
+  setPadScoreCallback,
   getPadSnapshot,
   getCurrentStrokes,
   renderIncomingStroke,
@@ -196,9 +197,62 @@ function confirmSheet({ title, body, yes, no }) {
 
 const leader = () => (S.teams[0].score >= S.teams[1].score ? S.teams[0] : S.teams[1]);
 
-/* ============================================================ scoreboard */
+function updateAllTeamNamesUI() {
+  if (typeof document === 'undefined' || !document) return;
+  const t0 = S.teams[0]?.name || 'Red';
+  const t1 = S.teams[1]?.name || 'Blue';
+
+  if ($('board')) renderBoard($('board'));
+  if ($('board2')) renderBoard($('board2'));
+  if ($('board3')) renderBoard($('board3'));
+
+  const lhName = $('lobby-host-name');
+  if (lhName) lhName.textContent = `${t0} (Host)`;
+  const lgName = $('lobby-guest-name');
+  if (lgName) lgName.textContent = t1;
+
+  const hrHost = $('hr-host-name');
+  if (hrHost) hrHost.textContent = t0;
+  const hrGuest = $('hr-guest-name');
+  if (hrGuest) hrGuest.textContent = t1;
+
+  const turnTeam = $('turn-team');
+  if (turnTeam) turnTeam.textContent = S.teams[S.picker]?.name || t0;
+
+  const teamNameEl = $('guest-team-name');
+  if (teamNameEl) teamNameEl.textContent = t1;
+  const grMyName = $('gr-my-name');
+  if (grMyName) grMyName.textContent = t1;
+  const grOtherName = $('gr-other-name');
+  if (grOtherName) grOtherName.textContent = t0;
+
+  const got0 = $('got0');
+  if (got0) got0.textContent = `${t0} got it`;
+  const got1 = $('got1');
+  if (got1) got1.textContent = `${t1} got it`;
+
+  const myTeamBtn = $('pad-btn-myteam');
+  const otherTeamBtn = $('pad-btn-otherteam');
+  if (myTeamBtn && otherTeamBtn) {
+    if (!isSynced()) {
+      myTeamBtn.textContent = `${t0} Got It!`;
+      otherTeamBtn.textContent = `${t1} Got It!`;
+    } else if (isHost()) {
+      myTeamBtn.textContent = `${t0} Got It!`;
+      otherTeamBtn.textContent = 'Other Team Guessed';
+    } else {
+      myTeamBtn.textContent = `${t1} Got It!`;
+      otherTeamBtn.textContent = 'Other Team Guessed';
+    }
+  }
+  const redBarLabel = $('red-bar-label');
+  if (redBarLabel) redBarLabel.textContent = t0;
+  const blueBarLabel = $('blue-bar-label');
+  if (blueBarLabel) blueBarLabel.textContent = t1;
+}
 
 function renderBoard(el) {
+  if (!el) return;
   el.innerHTML = S.teams
     .map(
       (t, i) => `
@@ -225,6 +279,12 @@ function renderBoard(el) {
       S.teams[i].drawn = S.teams[i].score;
       renderBoard(el);
       persist();
+      if (isHost() && typeof sendP2P === 'function') {
+        sendP2P('SCORE_ADJUST', {
+          team0Score: S.teams[0].score,
+          team1Score: S.teams[1].score,
+        });
+      }
     };
   });
 }
@@ -455,9 +515,12 @@ function startNewGame() {
     endReason: '',
     seed: null,
     code: null,
+    card: null,
+    theme: null,
   });
 
   applyMode();
+  updateAllTeamNamesUI();
   blip(660, 0.09);
 
   if (S.mode === 'host') {
@@ -509,6 +572,7 @@ function triggerSynchronizedCountdown(onComplete) {
       blip(1040, 0.15);
     } else {
       clearInterval(countdownTimer);
+      countdownTimer = null;
       overlay.hidden = true;
       onComplete();
     }
@@ -521,57 +585,72 @@ function startHostSyncedRound() {
     S.theme = r.theme;
     S.card = { tier: r.tier, pts: r.pts, word: r.word };
   }
-  startRound(S.card);
+
+  $('draw-theme').textContent = S.theme?.any ? '🎯 Anything goes' : `${S.theme?.icon || '🎨'} ${S.theme?.name || ''}`;
+  $('draw-worth').textContent = `Worth ${S.card.pts}`;
+  $('got0').textContent = `${S.teams[0].name} got it`;
+  $('got1').textContent = `${S.teams[1].name} got it`;
+  show('s-draw');
+
+  if (typeof openDuoPad === 'function') {
+    openDuoPad({
+      colorMode: 'red',
+      opponentTitle: `${S.teams[1].name} (Other Team)`,
+      opponentColor: S.teams[1].color,
+      team0Name: S.teams[0].name,
+      team1Name: S.teams[1].name,
+    });
+  }
+
   const endsAt = Date.now() + 3400 + S.len * 1000;
   if (typeof sendP2P === 'function') {
     sendP2P('START_COUNTDOWN', { round: S.round, endsAt, len: S.len, card: S.card, theme: S.theme });
   }
+
   triggerSynchronizedCountdown(() => {
     S.endsAt = endsAt;
+    S.pausedMs = null;
     runClock();
-    if (typeof openDuoPad === 'function') {
-      openDuoPad({
-        colorMode: 'red',
-        title: `${S.teams[0].name} Drawing Pad`,
-        opponentTitle: `${S.teams[1].name} (Other Team)`,
-        opponentColor: S.teams[1].color,
-        secretWord: S.card?.word || '',
-      });
-    }
   });
 }
 
 function startGuestSyncedRound() {
   startGuestRound();
+  if (typeof openDuoPad === 'function') {
+    openDuoPad({
+      colorMode: 'blue',
+      opponentTitle: `${S.teams[0].name} (Other Team)`,
+      opponentColor: S.teams[0].color,
+      team0Name: S.teams[0].name,
+      team1Name: S.teams[1].name,
+    });
+  }
   triggerSynchronizedCountdown(() => {
-    if (typeof openDuoPad === 'function') {
-      openDuoPad({
-        colorMode: 'blue',
-        title: `${S.teams[1].name} Drawing Pad`,
-        opponentTitle: `${S.teams[0].name} (Other Team)`,
-        opponentColor: S.teams[0].color,
-        secretWord: S.card?.word || '',
-      });
-    }
+    runClock();
   });
 }
 
 function handleP2PMessage(msg) {
   if (!msg || !msg.type || typeof document === 'undefined' || !document) return;
 
+  if (isGuest() && msg.round && msg.round < S.round && msg.type !== 'REMATCH') {
+    return;
+  }
+
   switch (msg.type) {
     case 'PEER_PING':
     case 'PEER_JOINED':
       if (isHost()) {
         guestInLobby = true;
-        const teamName = msg.name || S.teams[1].name || 'Team 2';
-        const lgName = $('lobby-guest-name');
-        if (lgName) lgName.textContent = teamName;
+        if (msg.name && msg.name !== 'Blue') {
+          S.teams[1].name = msg.name;
+        }
         const lgStatus = $('lobby-guest-status');
         if (lgStatus) {
           lgStatus.textContent = '✓ Joined';
           lgStatus.className = 'lobby-status ready';
         }
+        updateAllTeamNamesUI();
         sendP2P('HOST_ACK', { name: S.teams[0].name });
         sendP2P('ROOM_STATE', {
           round: S.round,
@@ -606,13 +685,13 @@ function handleP2PMessage(msg) {
     case 'HOST_ACK':
       if (isGuest() && msg.name) {
         S.teams[0].name = msg.name;
-        const oName = $('gr-other-name');
-        if (oName) oName.textContent = msg.name;
+        updateAllTeamNamesUI();
       }
       break;
 
     case 'ROOM_STATE':
       if (isGuest()) {
+        if (S.rounds && S.round > S.rounds) return;
         if (msg.round) S.round = msg.round;
         if (msg.picker !== undefined) S.picker = msg.picker;
         if (msg.theme) S.theme = msg.theme;
@@ -622,9 +701,8 @@ function handleP2PMessage(msg) {
         if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
         if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
         hostReadyState = Boolean(msg.hostReady);
+        updateAllTeamNamesUI();
 
-        const oName = $('gr-other-name');
-        if (oName) oName.textContent = S.teams[0].name;
         const oStatus = $('gr-other-status');
         if (oStatus) {
           oStatus.textContent = hostReadyState ? '✓ Ready' : 'Waiting for drawer…';
@@ -658,18 +736,19 @@ function handleP2PMessage(msg) {
           statusEl.textContent = hostReadyState ? '✓ Ready' : 'Waiting for drawer…';
           statusEl.className = hostReadyState ? 'ready-status ready' : 'ready-status waiting';
         }
-        if (hostReadyState && guestReadyState) {
-          startGuestSyncedRound();
-        }
       }
       break;
 
     case 'WORD_SELECTED':
+      if (isGuest() && S.rounds && S.round > S.rounds) break;
       if (S.round === msg.round || !S.round) {
         S.round = msg.round;
         S.picker = msg.picker;
         S.theme = msg.theme;
         S.card = msg.card;
+        if (msg.card?.word) {
+          S.used.add(msg.card.word);
+        }
         if (isHost()) {
           toHandoff();
         } else {
@@ -682,21 +761,46 @@ function handleP2PMessage(msg) {
 
     case 'START_COUNTDOWN':
       if (isGuest()) {
+        if (S.rounds && S.round > S.rounds) break;
         if (msg.round) S.round = msg.round;
         if (msg.theme) S.theme = msg.theme;
         if (msg.card) S.card = msg.card;
-        startGuestRound();
+
+        $('draw-theme').textContent = S.theme?.any ? '🎯 Anything goes' : `${S.theme?.icon || '🎨'} ${S.theme?.name || ''}`;
+        $('draw-worth').textContent = `Worth ${S.card?.pts || 1}`;
+        $('got0').textContent = `${S.teams[0].name} got it`;
+        $('got1').textContent = `${S.teams[1].name} got it`;
+        show('s-draw');
+
+        if (typeof openDuoPad === 'function') {
+          openDuoPad({
+            colorMode: 'blue',
+            opponentTitle: `${S.teams[0].name} (Other Team)`,
+            opponentColor: S.teams[0].color,
+            team0Name: S.teams[0].name,
+            team1Name: S.teams[1].name,
+          });
+        }
+
         triggerSynchronizedCountdown(() => {
-          if (msg.endsAt) {
-            S.endsAt = msg.endsAt;
-            runClock();
-          }
+          S.endsAt = msg.endsAt || (Date.now() + S.len * 1000);
+          S.pausedMs = null;
+          runClock();
         });
+      }
+      break;
+
+    case 'FINISH_ROUND':
+    case 'CLAIM_SCORE':
+      if (isHost()) {
+        stopClock();
+        finishRound(msg.winner);
       }
       break;
 
     case 'START_ROUND':
       if (isGuest()) {
+        if (S.rounds && S.round > S.rounds) break;
         if (S.round !== msg.round) S.round = msg.round;
         startGuestRound();
         if (msg.endsAt) {
@@ -727,6 +831,8 @@ function handleP2PMessage(msg) {
     case 'SCORE':
       if (isGuest()) {
         stopClock();
+        if (typeof closeDuoPad === 'function') closeDuoPad();
+        if (typeof resetDuoPad === 'function') resetDuoPad();
         if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
         if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
         if (Array.isArray(msg.history)) {
@@ -734,6 +840,9 @@ function handleP2PMessage(msg) {
         } else if (S.card) {
           const strokes = typeof getCurrentStrokes === 'function' ? getCurrentStrokes() : [];
           S.history.push({ r: msg.round, w: S.card.word, t: S.theme?.name || '', win: msg.winner, p: msg.pts, strokes });
+        }
+        if (S.rounds && S.round > S.rounds) {
+          return;
         }
         if (msg.winner === null) {
           $('res-eyebrow').textContent = `Round ${msg.round}`;
@@ -744,15 +853,29 @@ function handleP2PMessage(msg) {
           $('verdict').textContent = `+${msg.pts}`;
           $('verdict').style.color = S.teams[msg.winner].color;
         }
-        $('res-word').textContent = (S.card && S.card.word) || '';
+        $('res-word').textContent = msg.word || (S.card && S.card.word) || '';
+        $('next').textContent = 'Waiting for host…';
+        $('next').disabled = true;
+        $('next').style.opacity = '0.6';
         renderBoard($('board2'));
         show('s-result');
+      }
+      break;
+
+    case 'SCORE_ADJUST':
+      if (isGuest()) {
+        if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
+        if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        S.teams.forEach((t) => (t.drawn = t.score));
+        updateAllTeamNamesUI();
       }
       break;
 
     case 'NEXT_ROUND':
       if (isGuest()) {
         S.round = msg.round;
+        S.card = null;
+        S.theme = null;
         saveLastJoin();
         toGuestReady();
       }
@@ -761,14 +884,33 @@ function handleP2PMessage(msg) {
     case 'RENAME_TEAM':
       if (msg.teamIndex !== undefined && msg.name) {
         S.teams[msg.teamIndex].name = msg.name;
-        renderBoard($('board'));
-        renderBoard($('board2'));
-        renderBoard($('board3'));
-        const teamNameEl = $('guest-team-name');
-        if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
-        const grMyName = $('gr-my-name');
-        if (grMyName) grMyName.textContent = S.teams[1].name;
+        updateAllTeamNamesUI();
         toast(`${msg.name} updated their team name`);
+      }
+      break;
+
+    case 'REMATCH':
+      if (isGuest()) {
+        stopClock();
+        S.teams.forEach((t) => Object.assign(t, { score: 0, drawn: 0 }));
+        Object.assign(S, {
+          seed: msg.seed || S.seed,
+          code: msg.code || S.code,
+          diff: msg.diff || S.diff,
+          len: msg.len || S.len,
+          rounds: msg.rounds || S.rounds,
+          target: msg.target || S.target,
+          picker: 0,
+          round: 1,
+          history: [],
+          endReason: '',
+          card: null,
+          theme: null,
+        });
+        resetReplay(S.seed, S.diff);
+        saveLastJoin();
+        toGuestReady();
+        toast('Host started a rematch! Round 1 ready.');
       }
       break;
 
@@ -777,6 +919,7 @@ function handleP2PMessage(msg) {
         stopClock();
         if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
         if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        if (Array.isArray(msg.history)) S.history = msg.history;
         endGame(S.teams[msg.champIndex] || leader(), msg.reason);
       }
       break;
@@ -824,8 +967,6 @@ function showInvite() {
   show('s-invite');
 }
 
-/* ============================================================= turn loop */
-
 function toHandoff() {
   hostReadyState = false;
   guestReadyState = false;
@@ -834,9 +975,8 @@ function toHandoff() {
   S.picker = (S.round - 1) % 2;
   const t = S.teams[S.picker];
   $('roundlabel').textContent = `Round ${S.round}${S.rounds ? ` of ${S.rounds}` : ''}`;
-  $('turn-team').textContent = t.name;
-  $('turn-swatch').style.background = t.color;
   $('theme-who').textContent = `${t.name} picks the theme`;
+  updateAllTeamNamesUI();
 
   const hostWordBox = $('host-word-box');
   const hostReadyBox = $('host-ready-box');
@@ -1113,8 +1253,19 @@ function runClock() {
     if (left <= 0) {
       stopClock();
       buzzer();
-      if (isGuest()) endGuestRound();
-      else finishRound(null);
+      if (isGuest()) {
+        $('res-eyebrow').textContent = `Round ${S.round}`;
+        $('verdict').textContent = 'Time expired';
+        $('verdict').style.color = 'rgba(247,244,236,.35)';
+        $('res-word').textContent = S.card?.word || '';
+        $('next').textContent = 'Waiting for host…';
+        $('next').disabled = true;
+        $('next').style.opacity = '0.6';
+        renderBoard($('board2'));
+        show('s-result');
+      } else {
+        finishRound(null);
+      }
     }
   }, 50);
 }
@@ -1123,6 +1274,10 @@ function stopClock() {
   clearInterval(S.ticker);
   S.ticker = null;
   S.pausedMs = null;
+  clearInterval(countdownTimer);
+  countdownTimer = null;
+  const overlay = $('countdown-overlay');
+  if (overlay) overlay.hidden = true;
   releaseWakeLock();
   closeDuoPad();
 }
@@ -1144,13 +1299,13 @@ function resumeClock() {
 
 function startRound(card) {
   S.card = card;
+  if (typeof resetDuoPad === 'function') {
+    resetDuoPad();
+  }
   $('draw-theme').textContent = S.theme.any ? '🎯 Anything goes' : `${S.theme.icon} ${S.theme.name}`;
   $('draw-worth').textContent = `Worth ${card.pts}`;
   $('got0').textContent = `${S.teams[0].name} got it`;
   $('got1').textContent = `${S.teams[1].name} got it`;
-
-  S.pinned = false;
-  applyPeek();
 
   S.endsAt = Date.now() + S.len * 1000;
   S.pausedMs = null;
@@ -1160,22 +1315,15 @@ function startRound(card) {
   if (!isSynced() && typeof openDuoPad === 'function') {
     openDuoPad({
       colorMode: 'split',
-      title: 'Shared Drawing Pad',
-      secretWord: S.card?.word || '',
+      team0Name: S.teams[0].name,
+      team1Name: S.teams[1].name,
     });
-  }
-
-  if (isHost() && typeof sendP2P === 'function') {
-    sendP2P('START_ROUND', { round: S.round, endsAt: S.endsAt, len: S.len });
   }
 }
 
-/**
- * The word control. Solo phones sit on the table, so hold-to-peek is right.
- * A guest phone is in the drawer's hand, so it defaults to pinned.
- */
 function applyPeek() {
   const el = $('peek');
+  if (!el) return;
   if (S.pinned && S.card) {
     el.classList.add('showing');
     el.textContent = S.card.word;
@@ -1183,14 +1331,27 @@ function applyPeek() {
     el.classList.remove('showing');
     el.textContent = 'Hold to see the word';
   }
-  $('pin-toggle').textContent = S.pinned ? 'Hide the word' : 'Keep it on screen';
-  $('pin-toggle').setAttribute('aria-pressed', String(S.pinned));
+  const pinToggle = $('pin-toggle');
+  if (pinToggle) {
+    pinToggle.textContent = S.pinned ? 'Hide the word' : 'Keep it on screen';
+    pinToggle.setAttribute('aria-pressed', String(S.pinned));
+  }
 }
 
 /* ================================================================ results */
 
 function finishRound(winner) {
-  const pts = S.card.pts;
+  stopClock();
+  if (typeof closeDuoPad === 'function') {
+    closeDuoPad();
+  }
+  if (typeof resetDuoPad === 'function') {
+    resetDuoPad();
+  }
+
+  const pts = S.card ? S.card.pts : 1;
+  const word = S.card ? S.card.word : '';
+  const themeName = S.theme ? S.theme.name : '';
 
   if (winner === null) {
     $('res-eyebrow').textContent = `Round ${S.round}`;
@@ -1204,8 +1365,8 @@ function finishRound(winner) {
   }
 
   const strokes = typeof getCurrentStrokes === 'function' ? getCurrentStrokes() : [];
-  S.history.push({ r: S.round, w: S.card.word, t: S.theme.name, win: winner, p: pts, strokes });
-  $('res-word').textContent = S.card.word;
+  S.history.push({ r: S.round, w: word, t: themeName, win: winner, p: pts, strokes });
+  $('res-word').textContent = word;
   renderBoard($('board2'));
   persist();
 
@@ -1214,6 +1375,7 @@ function finishRound(winner) {
       winner,
       pts,
       round: S.round,
+      word,
       team0Score: S.teams[0].score,
       team1Score: S.teams[1].score,
       history: S.history,
@@ -1224,6 +1386,8 @@ function finishRound(winner) {
     return endGame(S.teams[winner], `First to ${S.target}.`);
   }
 
+  $('next').disabled = false;
+  $('next').style.opacity = '1';
   const isLast = S.rounds && S.round >= S.rounds;
   $('next').textContent = isLast ? 'See the final tally' : 'Next round';
   show('s-result');
@@ -1232,6 +1396,12 @@ function finishRound(winner) {
 function nextRound() {
   if (!$('s-result').classList.contains('is-active')) {
     return;
+  }
+  if (isGuest()) {
+    return;
+  }
+  if (typeof resetDuoPad === 'function') {
+    resetDuoPad();
   }
   if (S.rounds && S.round >= S.rounds) {
     return endGame(leader(), `All ${S.rounds} rounds played.`);
@@ -1264,7 +1434,9 @@ function endGame(champ, reason) {
   renderLog();
   show('s-win');
   victoryFanfare();
-  burstConfetti(champ.color || '#FF4262', other ? other.color : '#3D9BFF');
+  const c0 = TEAM_HEX[0];
+  const c1 = TEAM_HEX[1];
+  burstConfetti(champ.color === TEAM_COLORS[0] ? c0 : c1, champ.color === TEAM_COLORS[0] ? c1 : c0);
 
   if (isHost() && typeof sendP2P === 'function') {
     sendP2P('END_GAME', {
@@ -1272,6 +1444,7 @@ function endGame(champ, reason) {
       reason: S.endReason,
       team0Score: S.teams[0].score,
       team1Score: S.teams[1].score,
+      history: S.history,
     });
   }
 }
@@ -1333,6 +1506,7 @@ async function wrapUp() {
 
 function toGuestReady() {
   if (typeof resetDuoPad === 'function') resetDuoPad();
+  guestReadyState = false;
   const overCap = Boolean(S.rounds && S.round > S.rounds);
   const head = $('guest-head');
   const sub = $('guest-sub');
@@ -1343,6 +1517,7 @@ function toGuestReady() {
   const guestActionStack = $('guest-action-stack');
 
   S.picker = (S.round - 1) % 2;
+  updateAllTeamNamesUI();
 
   if (overCap) {
     $('guest-round').textContent = `Round ${S.rounds} of ${S.rounds}`;
@@ -1364,17 +1539,6 @@ function toGuestReady() {
   $('guest-round').textContent = `Round ${S.round}${S.rounds ? ` of ${S.rounds}` : ''}`;
   $('guest-sync').textContent = syncCode(S.seed, S.round);
 
-  const teamNameEl = $('guest-team-name');
-  if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
-  const teamDotEl = $('guest-team-dot');
-  if (teamDotEl) teamDotEl.style.background = S.teams[1].color;
-
-  const grMyName = $('gr-my-name');
-  if (grMyName) grMyName.textContent = S.teams[1].name;
-  const grMyDot = $('gr-my-dot');
-  if (grMyDot) grMyDot.style.background = S.teams[1].color;
-  const grOtherName = $('gr-other-name');
-  if (grOtherName) grOtherName.textContent = S.teams[0].name;
   const grMyBtn = $('gr-my-btn');
   if (grMyBtn) grMyBtn.textContent = guestReadyState ? '✓ Ready (waiting)' : "I'm ready";
   const grOtherStatus = $('gr-other-status');
@@ -1438,6 +1602,10 @@ function startGuestRound() {
 }
 
 function endGuestRound() {
+  const isDrawing = $('s-draw') && $('s-draw').classList.contains('is-active');
+  if (!S.card && !isDrawing) {
+    return;
+  }
   stopClock();
   S.round++;
   S.card = null;
@@ -1485,7 +1653,8 @@ function openJoin(prefill) {
   $('join-error').textContent = '';
   show('s-join');
   scanAvailable().then((ok) => {
-    $('join-scan').hidden = !ok;
+    const scanBtn = $('join-scan');
+    if (scanBtn) scanBtn.hidden = !ok;
   });
 }
 
@@ -1813,53 +1982,67 @@ function wireEvents() {
     dealCards();
   };
 
-  ['panic1', 'panic2'].forEach((id) => ($(id).onclick = () => $('veil').classList.add('on')));
-  $('veil').onclick = () => $('veil').classList.remove('on');
+  ['panic1', 'panic2'].forEach((id) => {
+    const btn = $(id);
+    if (btn) btn.onclick = () => $('veil').classList.add('on');
+  });
+  const veil = $('veil');
+  if (veil) veil.onclick = () => $('veil').classList.remove('on');
 
-  const peek = $('peek');
-  peek.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-  });
-  peek.addEventListener('pointerdown', (e) => {
-    if (S.pinned) return;
-    e.preventDefault();
-    peek.classList.add('showing');
-    peek.textContent = S.card ? S.card.word : '';
-  });
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) =>
-    peek.addEventListener(ev, () => {
-      if (!S.pinned) applyPeek();
-    })
-  );
-  $('pin-toggle').onclick = () => {
-    S.pinned = !S.pinned;
-    applyPeek();
-  };
+  if (typeof setPadScoreCallback === 'function') {
+    setPadScoreCallback((action) => {
+      stopClock();
+      if (!isSynced()) {
+        if (action === 'mine') finishRound(0);
+        else if (action === 'other') finishRound(1);
+        else finishRound(null);
+      } else if (isHost()) {
+        if (action === 'mine') finishRound(0);
+        else if (action === 'other') finishRound(1);
+        else finishRound(null);
+      } else if (isGuest()) {
+        const winner = action === 'mine' ? 1 : (action === 'other' ? 0 : null);
+        if (typeof sendP2P === 'function') {
+          sendP2P('FINISH_ROUND', { winner, round: S.round });
+        }
+      }
+    });
+  }
 
   [0, 1].forEach((i) => {
-    $(`got${i}`).onclick = () => {
-      if (!S.ticker) {
-        return; // this round is already decided
+    const btn = $(`got${i}`);
+    if (btn) {
+      btn.onclick = () => {
+        if (!$('s-draw').classList.contains('is-active')) {
+          return;
+        }
+        stopClock();
+        buzz(40);
+        blip(880, 0.1);
+        blip(1170, 0.14);
+        finishRound(i);
+      };
+    }
+  });
+  const giveUp = $('giveup');
+  if (giveUp) {
+    giveUp.onclick = () => {
+      if (!$('s-draw').classList.contains('is-active')) {
+        return;
       }
       stopClock();
-      buzz(40);
-      blip(880, 0.1);
-      blip(1170, 0.14);
-      finishRound(i);
+      finishRound(null);
     };
-  });
-  $('giveup').onclick = () => {
-    if (!S.ticker) {
-      return;
-    }
-    stopClock();
-    finishRound(null);
-  };
-  $('guest-done').onclick = endGuestRound;
+  }
+  const guestDone = $('guest-done');
+  if (guestDone) guestDone.onclick = endGuestRound;
 
   $('next').onclick = nextRound;
   ['wrap-handoff', 'wrap-theme', 'wrap-pick', 'wrap-draw', 'wrap-result'].forEach(
-    (id) => ($(id).onclick = wrapUp)
+    (id) => {
+      const btn = $(id);
+      if (btn) btn.onclick = wrapUp;
+    }
   );
 
   $('share').onclick = openShare;
@@ -1872,28 +2055,35 @@ function wireEvents() {
     }
   });
 
-  $('duo-toggle').onclick = () => {
-    blip(500, 0.06);
-    if (S.mode === 'solo') {
-      openDuoPad({ colorMode: 'split', title: 'Shared Drawing Pad', secretWord: S.card?.word || '' });
-    } else if (S.mode === 'host') {
-      openDuoPad({
-        colorMode: 'red',
-        title: `${S.teams[0].name} Drawing Pad`,
-        opponentTitle: `${S.teams[1].name} (Other Team)`,
-        opponentColor: S.teams[1].color,
-        secretWord: S.card?.word || '',
-      });
-    } else {
-      openDuoPad({
-        colorMode: 'blue',
-        title: `${S.teams[1].name} Drawing Pad`,
-        opponentTitle: `${S.teams[0].name} (Other Team)`,
-        opponentColor: S.teams[0].color,
-        secretWord: S.card?.word || '',
-      });
-    }
-  };
+  const duoToggle = $('duo-toggle');
+  if (duoToggle) {
+    duoToggle.onclick = () => {
+      blip(500, 0.06);
+      if (S.mode === 'solo') {
+        openDuoPad({
+          colorMode: 'split',
+          team0Name: S.teams[0].name,
+          team1Name: S.teams[1].name,
+        });
+      } else if (S.mode === 'host') {
+        openDuoPad({
+          colorMode: 'red',
+          opponentTitle: `${S.teams[1].name} (Other Team)`,
+          opponentColor: S.teams[1].color,
+          team0Name: S.teams[0].name,
+          team1Name: S.teams[1].name,
+        });
+      } else {
+        openDuoPad({
+          colorMode: 'blue',
+          opponentTitle: `${S.teams[0].name} (Other Team)`,
+          opponentColor: S.teams[0].color,
+          team0Name: S.teams[0].name,
+          team1Name: S.teams[1].name,
+        });
+      }
+    };
+  }
 
   $('invite-done').onclick = () => toHandoff();
   $('invite-copy').onclick = async () => {
@@ -1927,9 +2117,6 @@ function wireEvents() {
       if (typeof sendP2P === 'function') {
         sendP2P('DRAWER_READY', { role: 'guest', ready: guestReadyState, round: S.round });
       }
-      if (hostReadyState && guestReadyState) {
-        startGuestSyncedRound();
-      }
     };
   }
 
@@ -1951,11 +2138,6 @@ function wireEvents() {
     if (grMyBtn) grMyBtn.textContent = '✓ Ready (waiting)';
     if (typeof sendP2P === 'function') {
       sendP2P('DRAWER_READY', { role: 'guest', ready: true, round: S.round });
-    }
-    if (hostReadyState && guestReadyState) {
-      startGuestSyncedRound();
-    } else {
-      startGuestRound();
     }
   };
   $('guest-leave').onclick = leaveGame;
@@ -1982,8 +2164,7 @@ function wireEvents() {
       if (val) {
         S.teams[1].name = val;
       }
-      const teamNameEl = $('guest-team-name');
-      if (teamNameEl) teamNameEl.textContent = S.teams[1].name;
+      updateAllTeamNamesUI();
       $('guest-renamer').hidden = true;
       if (typeof sendP2P === 'function') {
         sendP2P('RENAME_TEAM', { teamIndex: 1, name: S.teams[1].name });
@@ -2008,6 +2189,10 @@ function wireEvents() {
   };
 
   $('again').onclick = () => {
+    if (isGuest()) {
+      toast('Waiting for host to start rematch…');
+      return;
+    }
     S.teams.forEach((t) => Object.assign(t, { score: 0, drawn: 0 }));
     Object.assign(S, { picker: 0, round: 1, history: [], endReason: '', id: 'g' + Date.now() });
     if (isSynced()) {
@@ -2021,6 +2206,16 @@ function wireEvents() {
         target: S.target,
       });
       persist();
+      if (typeof sendP2P === 'function') {
+        sendP2P('REMATCH', {
+          seed: S.seed,
+          code: S.code,
+          diff: S.diff,
+          len: S.len,
+          rounds: S.rounds,
+          target: S.target,
+        });
+      }
       return showInvite();
     }
     persist();
@@ -2029,6 +2224,13 @@ function wireEvents() {
   };
 
   $('reset').onclick = async () => {
+    if (isGuest()) {
+      if (typeof disconnectP2P === 'function') disconnectP2P();
+      S.mode = 'solo';
+      S.seed = null;
+      S.code = null;
+      applyMode();
+    }
     await renderSaves();
     show('s-setup');
   };
@@ -2146,8 +2348,21 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   if (!/^https?:$/.test(window.location.protocol)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {
-      /* offline support is a bonus, not a requirement */
+    navigator.serviceWorker
+      .register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        if (reg) {
+          reg.update().catch(() => {});
+        }
+      })
+      .catch(() => {
+        /* offline support is a bonus, not a requirement */
+      });
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'SW_UPDATED') {
+        console.log('[SW] Cache updated:', event.data.cache);
+      }
     });
   });
 }
