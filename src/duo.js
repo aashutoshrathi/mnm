@@ -175,6 +175,31 @@ function sideboardLayout() {
   }
 }
 
+let strokeBatch = [];
+let strokeFlushTimer = null;
+
+function flushStrokeBatch() {
+  if (strokeBatch.length === 0) return;
+  if (typeof sendP2P === 'function') {
+    sendP2P('STROKES', { from: padColorMode, pts: strokeBatch });
+  }
+  strokeBatch = [];
+}
+
+function queueStroke(aNorm, bNorm, color) {
+  strokeBatch.push({
+    a: { x: Math.round(aNorm.x * 1000) / 1000, y: Math.round(aNorm.y * 1000) / 1000 },
+    b: { x: Math.round(bNorm.x * 1000) / 1000, y: Math.round(bNorm.y * 1000) / 1000 },
+    c: color,
+  });
+  if (!strokeFlushTimer) {
+    strokeFlushTimer = setTimeout(() => {
+      strokeFlushTimer = null;
+      flushStrokeBatch();
+    }, 25);
+  }
+}
+
 function padStroke(a, b, color) {
   if (!padCtx) {
     return;
@@ -193,9 +218,7 @@ function padStroke(a, b, color) {
     if (rect.width > 0 && rect.height > 0) {
       const aNorm = { x: a.x / rect.width, y: a.y / rect.height };
       const bNorm = { x: b.x / rect.width, y: b.y / rect.height };
-      if (typeof sendP2P === 'function') {
-        sendP2P('STROKE', { from: padColorMode, aNorm, bNorm, color });
-      }
+      queueStroke(aNorm, bNorm, color);
       if (streamChannel) {
         try {
           streamChannel.postMessage({ type: 'stroke', from: padColorMode, aNorm, bNorm, color });
@@ -227,6 +250,19 @@ export function renderIncomingStroke(from, aNorm, bNorm, color) {
   const sa = { x: aNorm.x * rect.width, y: aNorm.y * rect.height };
   const sb = { x: bNorm.x * rect.width, y: bNorm.y * rect.height };
   sideboardStroke(sa, sb, color);
+}
+
+export function renderIncomingBatch(from, pts = []) {
+  if (!sideboardCtx || !sideboardCanvas || from === padColorMode) {
+    return;
+  }
+  const rect = sideboardCanvas.getBoundingClientRect();
+  for (const item of pts) {
+    if (!item || !item.a || !item.b) continue;
+    const sa = { x: item.a.x * rect.width, y: item.a.y * rect.height };
+    const sb = { x: item.b.x * rect.width, y: item.b.y * rect.height };
+    sideboardStroke(sa, sb, item.c || PAD_TOP_INK);
+  }
 }
 
 function clearPad() {
