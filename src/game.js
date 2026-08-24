@@ -1123,6 +1123,10 @@ function stopClock() {
   clearInterval(S.ticker);
   S.ticker = null;
   S.pausedMs = null;
+  clearInterval(countdownTimer);
+  countdownTimer = null;
+  const overlay = $('countdown-overlay');
+  if (overlay) overlay.hidden = true;
   releaseWakeLock();
   closeDuoPad();
 }

@@ -248,3 +248,4 @@ host.window.close();
 guest.window.close();
 
 console.log('\nALL 12 MULTI-DEVICE END-TO-END STEPS PASSED SUCCESSFULLY.');
+process.exit(0);
