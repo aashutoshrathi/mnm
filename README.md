@@ -112,10 +112,16 @@ screen to turn the phone into an instant digital drawing surface:
 Pick **Phone per team** at setup. The host phone shows a QR and an eight-character
 code; every other drawer joins and gets their own screen.
 
-**Nothing is transmitted after the join.** Both phones hold the same 24-bit seed,
-and round *N* is a pure function of `(seed, difficulty, N)`. Two devices computing
-the same function on the same inputs get the same word, forever, with the radios
-off.
+### Real-Time Synchronization via Public Relay
+
+To allow two phones anywhere on the internet (different Wi-Fi networks, cellular 4G/5G, or behind firewalls) to stay in sync without hosting custom backend infrastructure, the app connects both devices to public WebSocket MQTT relays (`broker.emqx.io` and `broker.hivemq.com`):
+
+1. **Room Lobby & Presence**: The host sees the guest join live in the Room Lobby.
+2. **Alternating Turn Word Picking**: In Round 1, Team Red (Host) picks the theme and selects from 3 card stakes (with Reshuffle support). In Round 2, Team Blue (Guest) picks. The chosen word is broadcast in real time to both devices.
+3. **Bilateral Drawer Readiness**: Both drawers see the chosen secret word on their screen and tap "I'm ready".
+4. **Synchronized 3-2-1 Countdown**: When both drawers are ready, the host taps "Start game". Both phones launch a simultaneous 3... 2... 1... GO! countdown with audio beeps and enter the draw screen with aligned 90-second clocks in exact lockstep.
+5. **Live Drawing & Opponent Sideboard**: Strokes drawn by one team are batched and streamed live to the opponent phone's top-right picture-in-picture sideboard.
+6. **Deterministic Offline Fallback**: If internet connectivity is unavailable, both devices derive identical rounds deterministically from the shared 24-bit seed.
 
 ### Joining
 
@@ -129,21 +135,7 @@ The typed code is the reason there's no QR *decoder* in this repo. Reading eight
 characters across a room takes about as long as lining up a camera, so scanning
 is the fast path rather than the only one.
 
-### What synced mode changes
-
-Rounds **deal themselves**: no theme or card picking. That isn't a limitation
-worked around, it's the point: the picking team's choice is the only state that
-would need a live channel, and removing it removes the need for one. For all-play
-it's arguably fairer anyway, since neither team gets to set the stakes.
-
-Scoring stays on the host phone. The humans in the room already know who shouted
-first; a second tally would just be a second thing to disagree with.
-
 ### Drift, and why it's visible instead of hidden
-
-If someone double-taps "next round", their phone is a round ahead and shows a
-different word. With no channel there is no way to detect that automatically:
-so the app makes it obvious instead of pretending otherwise.
 
 Every device shows a four-character **sync code** derived from `(seed, round)`.
 Matching codes mean matching words. If they differ, `- round` / `+ round` on the
@@ -171,18 +163,6 @@ walks all 248 of them.
 
 Crockford's alphabet drops `I`, `L`, `O` and `U`, and the decoder folds the
 lookalikes back, so `I` reads as `1` and `O` as `0` when a code is read aloud badly.
-
-### Transports considered and rejected
-
-- **Web Bluetooth**: central-only in browsers. A page can talk to a peripheral,
-  but two phones are both centrals, so phone-to-phone is impossible by design.
-- **Wi-Fi Direct / Aware**: no web API at all.
-- **WebRTC**: needs a signalling server and a shared network. The premise here
-  is that there isn't one.
-- **Ultrasonic data**: genuinely works, but it's a lot of DSP to move 40 bits
-  that a QR moves instantly and a human can read aloud.
-
-The seed approach beats all of them by needing no ongoing channel whatsoever.
 
 ## Persistence
 

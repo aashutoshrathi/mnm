@@ -32,7 +32,15 @@ import {
 } from './joincode.js';
 import { encodeQR, qrToSVG } from './qr.js';
 import { startScanner, scanAvailable } from './scan.js';
-import { wireDuoPad, openDuoPad, closeDuoPad } from './duo.js';
+import {
+  wireDuoPad,
+  openDuoPad,
+  closeDuoPad,
+  renderIncomingStroke,
+  renderIncomingBatch,
+  clearIncomingSideboard,
+} from './duo.js';
+import { connectP2P, disconnectP2P, sendP2P } from './p2p.js';
 
 /* ============================================================== constants */
 
@@ -100,15 +108,28 @@ const isSynced = () => S.mode !== 'solo';
 
 /* ================================================================ helpers */
 
-const $ = (id) => document.getElementById(id);
+const $ = (id) => (typeof document !== 'undefined' && document ? document.getElementById(id) : null);
 
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function isGameActive() {
+  if (typeof document === 'undefined' || !document) return false;
+  const setupActive = $('s-setup')?.classList.contains('is-active');
+  const winActive = $('s-win')?.classList.contains('is-active');
+  const joinActive = $('s-join')?.classList.contains('is-active');
+  return !setupActive && !winActive && !joinActive;
+}
 
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('is-active'));
   $(id).classList.add('is-active');
   window.scrollTo(0, 0);
+  if (id !== 's-setup' && id !== 's-join' && id !== 's-win') {
+    try {
+      history.pushState({ inGame: true }, '');
+    } catch (err) {}
+  }
 }
 
 let toastTimer;
@@ -476,12 +497,15 @@ function triggerSynchronizedCountdown(onComplete) {
 }
 
 function startHostSyncedRound() {
-  const r = roundFor(S.seed, S.diff, S.round);
-  S.theme = r.theme;
-  startRound({ tier: r.tier, pts: r.pts, word: r.word });
+  if (!S.card) {
+    const r = roundFor(S.seed, S.diff, S.round);
+    S.theme = r.theme;
+    S.card = { tier: r.tier, pts: r.pts, word: r.word };
+  }
+  startRound(S.card);
   const endsAt = Date.now() + 3400 + S.len * 1000;
   if (typeof sendP2P === 'function') {
-    sendP2P('START_COUNTDOWN', { round: S.round, endsAt, len: S.len });
+    sendP2P('START_COUNTDOWN', { round: S.round, endsAt, len: S.len, card: S.card, theme: S.theme });
   }
   triggerSynchronizedCountdown(() => {
     S.endsAt = endsAt;
@@ -495,7 +519,7 @@ function startGuestSyncedRound() {
 }
 
 function handleP2PMessage(msg) {
-  if (!msg || !msg.type) return;
+  if (!msg || !msg.type || typeof document === 'undefined' || !document) return;
 
   switch (msg.type) {
     case 'PEER_PING':
@@ -510,9 +534,34 @@ function handleP2PMessage(msg) {
           lgStatus.textContent = '✓ Joined';
           lgStatus.className = 'lobby-status ready';
         }
-        toast(`${teamName} connected to the room!`);
-        blip(880, 0.1);
         sendP2P('HOST_ACK', { name: S.teams[0].name });
+        sendP2P('ROOM_STATE', {
+          round: S.round,
+          picker: S.picker,
+          theme: S.theme,
+          card: S.card,
+          hostReady: hostReadyState,
+          team0Name: S.teams[0].name,
+          team1Name: S.teams[1].name,
+          team0Score: S.teams[0].score,
+          team1Score: S.teams[1].score,
+        });
+      }
+      break;
+
+    case 'SYNC_REQUEST':
+      if (isHost()) {
+        sendP2P('ROOM_STATE', {
+          round: S.round,
+          picker: S.picker,
+          theme: S.theme,
+          card: S.card,
+          hostReady: hostReadyState,
+          team0Name: S.teams[0].name,
+          team1Name: S.teams[1].name,
+          team0Score: S.teams[0].score,
+          team1Score: S.teams[1].score,
+        });
       }
       break;
 
@@ -521,6 +570,35 @@ function handleP2PMessage(msg) {
         S.teams[0].name = msg.name;
         const oName = $('gr-other-name');
         if (oName) oName.textContent = msg.name;
+      }
+      break;
+
+    case 'ROOM_STATE':
+      if (isGuest()) {
+        if (msg.round) S.round = msg.round;
+        if (msg.picker !== undefined) S.picker = msg.picker;
+        if (msg.theme) S.theme = msg.theme;
+        if (msg.card) S.card = msg.card;
+        if (msg.team0Name) S.teams[0].name = msg.team0Name;
+        if (msg.team1Name) S.teams[1].name = msg.team1Name;
+        if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
+        if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        hostReadyState = Boolean(msg.hostReady);
+
+        const oName = $('gr-other-name');
+        if (oName) oName.textContent = S.teams[0].name;
+        const oStatus = $('gr-other-status');
+        if (oStatus) {
+          oStatus.textContent = hostReadyState ? '✓ Ready' : 'Waiting for drawer…';
+          oStatus.className = hostReadyState ? 'ready-status ready' : 'ready-status waiting';
+        }
+
+        const isDrawing = $('s-draw').classList.contains('is-active');
+        const isTheme = $('s-theme').classList.contains('is-active');
+        const isPick = $('s-pick').classList.contains('is-active');
+        if (!isDrawing && !isTheme && !isPick) {
+          toGuestReady();
+        }
       }
       break;
 
@@ -566,9 +644,11 @@ function handleP2PMessage(msg) {
 
     case 'START_COUNTDOWN':
       if (isGuest()) {
-        if (S.round !== msg.round) S.round = msg.round;
+        if (msg.round) S.round = msg.round;
+        if (msg.theme) S.theme = msg.theme;
+        if (msg.card) S.card = msg.card;
+        startGuestRound();
         triggerSynchronizedCountdown(() => {
-          startGuestRound();
           if (msg.endsAt) {
             S.endsAt = msg.endsAt;
             runClock();
@@ -585,6 +665,12 @@ function handleP2PMessage(msg) {
           S.endsAt = msg.endsAt;
           runClock();
         }
+      }
+      break;
+
+    case 'STROKES':
+      if (msg.pts && Array.isArray(msg.pts)) {
+        renderIncomingBatch(msg.from, msg.pts);
       }
       break;
 
@@ -703,72 +789,63 @@ function toHandoff() {
   $('turn-swatch').style.background = t.color;
   $('theme-who').textContent = `${t.name} picks the theme`;
 
+  const hostWordBox = $('host-word-box');
   const hostReadyBox = $('host-ready-box');
 
   if (isSynced()) {
     $('sync-badge').hidden = false;
     $('sync-code').textContent = syncCode(S.seed, S.round);
 
-    if (S.picker === 0) {
-      if (!S.card) {
+    if (!S.card) {
+      if (hostWordBox) hostWordBox.hidden = true;
+      if (hostReadyBox) hostReadyBox.hidden = true;
+
+      if (S.picker === 0) {
         $('handoff-head').textContent = `Your turn to pick, ${S.teams[0].name}!`;
         $('handoff-sub').textContent = 'Choose a theme and word for both teams to draw.';
         $('reveal').textContent = 'Pick theme and word';
-        if (hostReadyBox) hostReadyBox.hidden = true;
+        $('reveal').hidden = false;
       } else {
-        $('handoff-head').textContent = 'Both drawers, ready?';
-        $('handoff-sub').textContent =
-          `Theme: ${S.theme.name} (Worth ${S.card.pts}). When both drawers are ready, the countdown begins.`;
-        $('reveal').textContent = 'Start round ' + S.round;
-        if (hostReadyBox) {
-          hostReadyBox.hidden = false;
-          const hrHost = $('hr-host-name');
-          if (hrHost) hrHost.textContent = S.teams[0].name;
-          const hrGuest = $('hr-guest-name');
-          if (hrGuest) hrGuest.textContent = S.teams[1].name;
-          const hrHostBtn = $('hr-host-btn');
-          if (hrHostBtn) hrHostBtn.textContent = "I'm ready";
-          const hrGuestStatus = $('hr-guest-status');
-          if (hrGuestStatus) {
-            hrGuestStatus.textContent = 'Waiting for drawer…';
-            hrGuestStatus.className = 'ready-status waiting';
-          }
-        }
+        $('handoff-head').textContent = `${S.teams[1].name} is choosing…`;
+        $('handoff-sub').textContent = `Waiting for ${S.teams[1].name} to choose the theme and word.`;
+        $('reveal').textContent = 'Pick on this phone instead';
+        $('reveal').hidden = false;
       }
     } else {
-      if (!S.card) {
-        $('handoff-head').textContent = `${S.teams[1].name} is picking…`;
-        $('handoff-sub').textContent = 'Waiting for the other team to choose the theme and word.';
-        $('reveal').textContent = 'Pick on this phone instead';
-        if (hostReadyBox) hostReadyBox.hidden = true;
-      } else {
-        $('handoff-head').textContent = 'Both drawers, ready?';
-        $('handoff-sub').textContent =
-          `${S.teams[1].name} picked ${S.theme.name} (Worth ${S.card.pts}). When both drawers are ready, the countdown begins.`;
-        $('reveal').textContent = 'Start round ' + S.round;
-        if (hostReadyBox) {
-          hostReadyBox.hidden = false;
-          const hrHost = $('hr-host-name');
-          if (hrHost) hrHost.textContent = S.teams[0].name;
-          const hrGuest = $('hr-guest-name');
-          if (hrGuest) hrGuest.textContent = S.teams[1].name;
-          const hrHostBtn = $('hr-host-btn');
-          if (hrHostBtn) hrHostBtn.textContent = "I'm ready";
-          const hrGuestStatus = $('hr-guest-status');
-          if (hrGuestStatus) {
-            hrGuestStatus.textContent = 'Waiting for drawer…';
-            hrGuestStatus.className = 'ready-status waiting';
-          }
+      if (hostWordBox) {
+        hostWordBox.hidden = false;
+        $('host-word-theme').textContent = `${S.theme.icon || '🎨'} ${S.theme.name} · Worth ${S.card.pts}`;
+        $('host-word-text').textContent = S.card.word;
+      }
+      $('handoff-head').textContent = 'Both drawers, ready?';
+      $('handoff-sub').textContent = 'Mark ready when set. The host starts the countdown when both are ready.';
+      $('reveal').textContent = 'Start game';
+      $('reveal').hidden = false;
+
+      if (hostReadyBox) {
+        hostReadyBox.hidden = false;
+        const hrHost = $('hr-host-name');
+        if (hrHost) hrHost.textContent = S.teams[0].name;
+        const hrGuest = $('hr-guest-name');
+        if (hrGuest) hrGuest.textContent = S.teams[1].name;
+        const hrHostBtn = $('hr-host-btn');
+        if (hrHostBtn) hrHostBtn.textContent = "I'm ready";
+        const hrGuestStatus = $('hr-guest-status');
+        if (hrGuestStatus) {
+          hrGuestStatus.textContent = guestReadyState ? '✓ Ready' : 'Waiting for drawer…';
+          hrGuestStatus.className = guestReadyState ? 'ready-status ready' : 'ready-status waiting';
         }
       }
     }
   } else {
+    if (hostWordBox) hostWordBox.hidden = true;
+    if (hostReadyBox) hostReadyBox.hidden = true;
     $('handoff-head').textContent = 'Both drawers, huddle up';
     $('handoff-sub').textContent =
       'One drawer from each team looks at the screen together. Everyone else: eyes off.';
     $('reveal').textContent = "We're the drawers: deal us in";
+    $('reveal').hidden = false;
     $('sync-badge').hidden = true;
-    if (hostReadyBox) hostReadyBox.hidden = true;
   }
 
   renderBoard($('board'));
@@ -793,7 +870,7 @@ function dealThemes() {
       return `
         <button class="theme${t.any ? ' any' : ''}" data-i="${i}">
           <span class="ic">${t.icon}</span>
-          <span><span class="tt">${t.name}</span><span class="td">${note}</span></span>
+          <span style="min-width:0;flex:1"><span class="tt">${t.name}</span><span class="td">${note}</span></span>
         </button>`;
     })
     .join('');
@@ -1201,28 +1278,29 @@ function toGuestReady() {
   const head = $('guest-head');
   const sub = $('guest-sub');
   const startBtn = $('guest-start');
+  const guestWordBox = $('guest-word-box');
+  const guestReadyBox = $('guest-ready-box');
+  const guestPreviewBox = $('guest-preview-box');
+  const guestActionStack = $('guest-action-stack');
+
+  S.picker = (S.round - 1) % 2;
 
   if (overCap) {
     $('guest-round').textContent = `Round ${S.rounds} of ${S.rounds}`;
     $('guest-sync').textContent = 'DONE';
     if (head) head.textContent = 'Game complete';
     if (sub) sub.textContent = 'All rounds have been played. Check the host phone for the final tally and podium.';
+    if (guestWordBox) guestWordBox.hidden = true;
+    if (guestReadyBox) guestReadyBox.hidden = true;
+    if (guestPreviewBox) guestPreviewBox.hidden = false;
     $('guest-theme').textContent = '🏁 All done';
     $('guest-worth').textContent = 'Game over';
+    if (guestActionStack) guestActionStack.hidden = false;
     startBtn.textContent = 'Leave game';
     startBtn.onclick = leaveGame;
     show('s-guest');
     return;
   }
-
-  if (head) head.textContent = "You're a drawer";
-  if (sub) sub.textContent = 'Check the sync code matches the host\'s. If it doesn\'t, step this phone\'s round to line up.';
-  startBtn.textContent = 'Show the word and start';
-  startBtn.onclick = startGuestRound;
-
-  hostReadyState = false;
-  guestReadyState = false;
-  S.picker = (S.round - 1) % 2;
 
   $('guest-round').textContent = `Round ${S.round}${S.rounds ? ` of ${S.rounds}` : ''}`;
   $('guest-sync').textContent = syncCode(S.seed, S.round);
@@ -1239,47 +1317,53 @@ function toGuestReady() {
   const grOtherName = $('gr-other-name');
   if (grOtherName) grOtherName.textContent = S.teams[0].name;
   const grMyBtn = $('gr-my-btn');
-  if (grMyBtn) grMyBtn.textContent = "I'm ready";
+  if (grMyBtn) grMyBtn.textContent = guestReadyState ? '✓ Ready (waiting)' : "I'm ready";
   const grOtherStatus = $('gr-other-status');
   if (grOtherStatus) {
-    grOtherStatus.textContent = 'Waiting for drawer…';
-    grOtherStatus.className = 'ready-status waiting';
+    grOtherStatus.textContent = hostReadyState ? '✓ Ready' : 'Waiting for drawer…';
+    grOtherStatus.className = hostReadyState ? 'ready-status ready' : 'ready-status waiting';
   }
 
-  const grBox = $('guest-ready-box');
+  if (!S.card) {
+    if (guestWordBox) guestWordBox.hidden = true;
+    if (guestReadyBox) guestReadyBox.hidden = true;
+    if (guestPreviewBox) guestPreviewBox.hidden = false;
 
-  if (S.picker === 1) {
-    if (!S.card) {
+    if (S.picker === 1) {
       if (head) head.textContent = `Your turn to pick, ${S.teams[1].name}!`;
       if (sub) sub.textContent = 'Choose a theme and word for both teams to draw.';
       $('guest-theme').textContent = '❓ Choose theme';
       $('guest-worth').textContent = 'Select card';
+      if (guestActionStack) guestActionStack.hidden = false;
       startBtn.textContent = 'Pick theme and word';
-      if (grBox) grBox.hidden = true;
+      startBtn.onclick = () => {
+        dealThemes();
+        show('s-theme');
+      };
     } else {
-      if (head) head.textContent = "You're a drawer";
-      if (sub) sub.textContent = `Theme: ${S.theme.name} (Worth ${S.card.pts}). Tap ready when set!`;
-      $('guest-theme').textContent = `${S.theme.icon || '🎨'} ${S.theme.name}`;
-      $('guest-worth').textContent = `Worth ${S.card.pts}`;
-      startBtn.textContent = 'Ready to draw';
-      if (grBox) grBox.hidden = false;
-    }
-  } else {
-    if (!S.card) {
-      if (head) head.textContent = `${S.teams[0].name} is picking…`;
-      if (sub) sub.textContent = 'Waiting for the host to choose the theme and word.';
+      if (head) head.textContent = `${S.teams[0].name} is choosing…`;
+      if (sub) sub.textContent = `Waiting for ${S.teams[0].name} to choose the theme and word.`;
       $('guest-theme').textContent = '⏳ Waiting for pick';
       $('guest-worth').textContent = '...';
+      if (guestActionStack) guestActionStack.hidden = false;
       startBtn.textContent = 'Pick on this phone instead';
-      if (grBox) grBox.hidden = true;
-    } else {
-      if (head) head.textContent = "You're a drawer";
-      if (sub) sub.textContent = `${S.teams[0].name} picked ${S.theme.name} (Worth ${S.card.pts}). Tap ready when set!`;
-      $('guest-theme').textContent = `${S.theme.icon || '🎨'} ${S.theme.name}`;
-      $('guest-worth').textContent = `Worth ${S.card.pts}`;
-      startBtn.textContent = 'Ready to draw';
-      if (grBox) grBox.hidden = false;
+      startBtn.onclick = () => {
+        dealThemes();
+        show('s-theme');
+      };
     }
+  } else {
+    if (guestWordBox) {
+      guestWordBox.hidden = false;
+      $('guest-word-theme').textContent = `${S.theme.icon || '🎨'} ${S.theme.name} · Worth ${S.card.pts}`;
+      $('guest-word-text').textContent = S.card.word;
+    }
+    if (guestPreviewBox) guestPreviewBox.hidden = true;
+    if (guestActionStack) guestActionStack.hidden = true;
+
+    if (head) head.textContent = "You're a drawer";
+    if (sub) sub.textContent = 'Mark ready when set. The host will start the countdown for both teams.';
+    if (guestReadyBox) guestReadyBox.hidden = false;
   }
 
   show('s-guest');
@@ -1388,6 +1472,7 @@ async function enterGuestMode(code, payload, round, playSound = true) {
   if (typeof connectP2P === 'function') {
     connectP2P({ code: S.code, role: 'guest', onMessage: handleP2PMessage });
     sendP2P('PEER_JOINED', { name: S.teams[1].name });
+    sendP2P('SYNC_REQUEST', { round: S.round });
   }
   toGuestReady();
   toast(`Joined ${formatJoinCode(code)}. Review and edit your team name below if you want to.`);
@@ -1502,8 +1587,16 @@ function wireEvents() {
   $('reveal').onclick = () => {
     if (isSynced()) {
       if (!S.card) {
-        dealThemes();
-        show('s-theme');
+        if (S.picker === 0) {
+          dealThemes();
+          show('s-theme');
+        } else {
+          const r = roundFor(S.seed, S.diff, S.round);
+          S.theme = r.theme;
+          S.card = { tier: r.tier, pts: r.pts, word: r.word };
+          sendP2P('WORD_SELECTED', { round: S.round, picker: S.picker, theme: S.theme, card: S.card });
+          toHandoff();
+        }
         return;
       }
       hostReadyState = true;
@@ -1649,8 +1742,16 @@ function wireEvents() {
 
   $('guest-start').onclick = () => {
     if (!S.card) {
-      dealThemes();
-      show('s-theme');
+      if (S.picker === 1) {
+        dealThemes();
+        show('s-theme');
+      } else {
+        const r = roundFor(S.seed, S.diff, S.round);
+        S.theme = r.theme;
+        S.card = { tier: r.tier, pts: r.pts, word: r.word };
+        sendP2P('WORD_SELECTED', { round: S.round, picker: S.picker, theme: S.theme, card: S.card });
+        toGuestReady();
+      }
       return;
     }
     guestReadyState = true;
@@ -1785,15 +1886,65 @@ function wireEvents() {
     if (document.hidden) {
       stopScanner();
       releaseWakeLock();
-    } else if ($('s-draw').classList.contains('is-active') && S.ticker) {
-      paintClock();
-      requestWakeLock();
+    } else {
+      if ($('s-draw').classList.contains('is-active') && S.ticker) {
+        paintClock();
+        requestWakeLock();
+      }
+      if (typeof sendP2P === 'function') {
+        if (isGuest()) {
+          sendP2P('SYNC_REQUEST', { round: S.round });
+        } else if (isHost()) {
+          sendP2P('ROOM_STATE', {
+            round: S.round,
+            picker: S.picker,
+            theme: S.theme,
+            card: S.card,
+            hostReady: hostReadyState,
+            team0Name: S.teams[0].name,
+            team1Name: S.teams[1].name,
+            team0Score: S.teams[0].score,
+            team1Score: S.teams[1].score,
+          });
+        }
+      }
     }
   });
 
   window.addEventListener('pagehide', () => {
     stopScanner();
     releaseWakeLock();
+  });
+
+  window.addEventListener('beforeunload', (e) => {
+    if (isGameActive()) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  window.addEventListener('popstate', async () => {
+    if (isGameActive()) {
+      try {
+        history.pushState({ inGame: true }, '');
+      } catch (err) {}
+      const ok = await confirmSheet({
+        title: 'Leave the game?',
+        body: 'Are you sure you want to leave? Active round progress will be lost.',
+        yes: 'Leave game',
+        no: 'Stay in game',
+      });
+      if (ok) {
+        stopClock();
+        if (typeof disconnectP2P === 'function') disconnectP2P();
+        S.mode = 'solo';
+        S.seed = null;
+        S.code = null;
+        applyMode();
+        await renderSaves();
+        show('s-setup');
+      }
+    }
   });
 }
 

@@ -168,6 +168,11 @@
       <h2 id="handoff-head">Both drawers, huddle up</h2>
       <p class="sub" id="handoff-sub">One drawer from each team looks at the screen together. Everyone else: eyes off.</p>
 
+      <div class="secret-word-box" id="host-word-box" hidden>
+        <p class="eyebrow" id="host-word-theme">🐘 Animals · Worth 2</p>
+        <div class="secret-word" id="host-word-text">Elephant</div>
+      </div>
+
       <div class="ready-box" id="host-ready-box" hidden>
         <div class="ready-head">Drawer readiness</div>
         <div class="ready-row">
@@ -340,7 +345,12 @@
         </div>
       </div>
 
-      <div class="ready-box" id="guest-ready-box">
+      <div class="secret-word-box" id="guest-word-box" hidden>
+        <p class="eyebrow" id="guest-word-theme">🐘 Animals · Worth 2</p>
+        <div class="secret-word" id="guest-word-text">Elephant</div>
+      </div>
+
+      <div class="ready-box" id="guest-ready-box" hidden>
         <div class="ready-head">Drawer readiness</div>
         <div class="ready-row">
           <span class="ready-team"><span class="team-dot" id="gr-my-dot" style="background:var(--blue)"></span> <span id="gr-my-name">Blue</span></span>
@@ -352,7 +362,7 @@
         </div>
       </div>
 
-      <div class="preview">
+      <div class="preview" id="guest-preview-box">
         <span class="pv-theme" id="guest-theme">🐘 Animals</span>
         <span class="pv-worth" id="guest-worth">Worth 2</span>
       </div>
@@ -363,8 +373,8 @@
       <button class="linkbtn" id="guest-fwd">+ round</button>
     </div>
 
-    <div class="stack">
-      <button class="btn btn--yellow" id="guest-start" data-haptic="20">Show the word and start</button>
+    <div class="stack" id="guest-action-stack">
+      <button class="btn btn--yellow" id="guest-start" data-haptic="20">Pick theme and word</button>
     </div>
   </section>
 

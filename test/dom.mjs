@@ -68,6 +68,8 @@ async function boot({ hash = '' } = {}) {
       window.navigator.vibrate = () => true;
       window.HTMLCanvasElement.prototype.getContext = () => null;
       window.scrollTo = () => {};
+      window.BroadcastChannel = globalThis.BroadcastChannel;
+      window.WebSocket = globalThis.WebSocket;
     },
   });
 
@@ -281,18 +283,18 @@ await test('a guest joining by link sees the host word for the same round', asyn
   click(host, host.window.document.querySelector('.theme'));
   click(host, host.window.document.querySelector('.card'));
   click(host, 'reveal');
-  click(host, 'pin-toggle'); // the host word sits behind hold-to-peek
+  click(host, 'pin-toggle');
   const hostWord = $(host, 'peek').textContent;
-  const hostTheme = $(host, 'draw-theme').textContent;
-  const hostWorth = $(host, 'draw-worth').textContent;
   assert.ok(hostWord.length > 1 && hostWord !== 'Hold to see the word', 'host word should be readable');
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  await new Promise((r) => setTimeout(r, 50));
   assert.equal(active(guest), 's-guest', 'the link should join automatically');
+  assert.ok(!$(guest, 'guest-word-box').hidden);
+  assert.equal($(guest, 'guest-word-text').textContent, hostWord);
 
-  click(guest, 'guest-start');
-  assert.equal(active(guest), 's-draw');
-  assert.ok($(guest, 'peek').textContent.length > 1);
+  click(guest, 'gr-my-btn');
+  assert.match($(guest, 'gr-my-btn').textContent, /Ready/);
 
   host.window.close();
   guest.window.close();
@@ -316,10 +318,10 @@ await test('a guest typing the code reaches the same round', async () => {
   assert.equal(active(guest), 's-join');
   $(guest, 'join-code').value = code.toLowerCase();
   click(guest, 'join-go');
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 50));
   assert.equal(active(guest), 's-guest');
-  click(guest, 'guest-start');
-  assert.equal(active(guest), 's-draw');
+  assert.ok(!$(guest, 'guest-word-box').hidden);
+  assert.equal($(guest, 'guest-word-text').textContent, hostWord);
 
   host.window.close();
   guest.window.close();
@@ -363,9 +365,17 @@ await test('guest mode hides host-only controls on the draw screen', async () =>
   pickSegment(host, 'seg-devices', 'host');
   click(host, 'go');
   const url = $(host, 'invite-url').textContent;
+  click(host, 'invite-done');
+  click(host, 'reveal');
+  click(host, host.window.document.querySelector('.theme'));
+  click(host, host.window.document.querySelector('.card'));
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
-  click(guest, 'guest-start');
+  await new Promise((r) => setTimeout(r, 50));
+  click(host, 'reveal');
+  await new Promise((r) => setTimeout(r, 50));
+
+  assert.equal(active(guest), 's-draw');
   assert.ok(guest.window.document.body.classList.contains('mode-guest'));
   assert.ok(!visible(guest, 'got0'), 'guests do not score');
   assert.ok(!visible(guest, 'got1'), 'guests do not score');
@@ -381,20 +391,26 @@ await test('a guest advancing lands on the next round', async () => {
   pickSegment(host, 'seg-devices', 'host');
   click(host, 'go');
   const url = $(host, 'invite-url').textContent;
+  click(host, 'invite-done');
+  click(host, 'reveal');
+  click(host, host.window.document.querySelector('.theme'));
+  click(host, host.window.document.querySelector('.card'));
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
-  click(guest, 'guest-start');
+  await new Promise((r) => setTimeout(r, 50));
+  click(host, 'reveal');
+  await new Promise((r) => setTimeout(r, 50));
+
   const first = $(guest, 'peek').textContent;
   click(guest, 'guest-done');
   assert.equal(active(guest), 's-guest');
   assert.match($(guest, 'guest-round').textContent, /Round 2/);
   click(guest, 'guest-start');
-  if (active(guest) === 's-theme') {
-    click(guest, guest.window.document.querySelector('.theme'));
-    click(guest, guest.window.document.querySelector('.card'));
-    click(guest, 'guest-start');
-  }
-  assert.notEqual($(guest, 'peek').textContent, first);
+  assert.equal(active(guest), 's-theme');
+  click(guest, guest.window.document.querySelector('.theme'));
+  click(guest, guest.window.document.querySelector('.card'));
+  assert.equal(active(guest), 's-guest');
+  assert.notEqual($(guest, 'guest-word-text').textContent, first);
 
   host.window.close();
   guest.window.close();
@@ -428,9 +444,16 @@ await test('guests can open the drawing pad to draw for their team with opponent
   pickSegment(host, 'seg-devices', 'host');
   click(host, 'go');
   const url = $(host, 'invite-url').textContent;
+  click(host, 'invite-done');
+  click(host, 'reveal');
+  click(host, host.window.document.querySelector('.theme'));
+  click(host, host.window.document.querySelector('.card'));
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
-  click(guest, 'guest-start');
+  await new Promise((r) => setTimeout(r, 50));
+  click(host, 'reveal');
+  await new Promise((r) => setTimeout(r, 50));
+
   assert.equal(active(guest), 's-draw');
   assert.ok(visible(guest, 'duo-toggle'), 'the toggle should be available for guests');
 
@@ -485,9 +508,14 @@ await test('multi-device lobby and drawer readiness boxes display team presence'
   assert.equal(active(host), 's-handoff');
   assert.ok(!$(host, 'host-ready-box').hidden);
   assert.equal($(host, 'hr-host-btn').textContent, "I'm ready");
+  assert.ok(!$(host, 'host-word-box').hidden);
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  await new Promise((r) => setTimeout(r, 50));
   assert.equal(active(guest), 's-guest');
+  assert.ok(!$(guest, 'guest-ready-box').hidden);
+  assert.equal($(guest, 'gr-my-btn').textContent, "I'm ready");
+  assert.ok(!$(guest, 'guest-word-box').hidden);
 
   host.window.close();
   guest.window.close();
@@ -499,16 +527,24 @@ await test('guests reaching the round cap see completion state and can step back
   pickSegment(host, 'seg-rounds', '5');
   click(host, 'go');
   const url = $(host, 'invite-url').textContent;
+  click(host, 'invite-done');
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
   for (let r = 1; r <= 5; r++) {
-    click(guest, 'guest-start');
-    if (active(guest) === 's-theme') {
+    if (r % 2 === 1) {
+      click(host, 'reveal');
+      click(host, host.window.document.querySelector('.theme'));
+      click(host, host.window.document.querySelector('.card'));
+      click(host, 'reveal');
+    } else {
+      click(guest, 'guest-start');
       click(guest, guest.window.document.querySelector('.theme'));
       click(guest, guest.window.document.querySelector('.card'));
-      click(guest, 'guest-start');
+      click(host, 'reveal');
     }
     click(guest, 'guest-done');
+    click(host, 'got0');
+    if (r < 5) click(host, 'next');
   }
 
   assert.equal(active(guest), 's-guest');
@@ -516,7 +552,7 @@ await test('guests reaching the round cap see completion state and can step back
   assert.equal($(guest, 'guest-start').textContent, 'Leave game');
 
   click(guest, 'guest-back');
-  assert.match($(guest, 'guest-head').textContent, /drawer|picking/i);
+  assert.match($(guest, 'guest-head').textContent, /drawer|choosing|picking/i);
 
   host.window.close();
   guest.window.close();

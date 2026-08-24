@@ -546,6 +546,38 @@ body:not(.mode-synced) #show-invite { display: none; }
   color: rgba(247,244,236,.4);
 }
 
+/* secret word display box */
+.secret-word-box {
+  width: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 16px 20px;
+  border-radius: 12px;
+  text-align: center;
+  margin: 14px 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  animation: rise .24s cubic-bezier(.2,.8,.3,1) both;
+}
+
+.secret-word-box[hidden] {
+  display: none;
+}
+
+.secret-word-box .eyebrow {
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.secret-word-box .secret-word {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-transform: uppercase;
+}
+
 /* countdown overlay */
 .countdown-overlay {
   position: fixed;
