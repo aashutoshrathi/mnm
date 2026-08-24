@@ -58,6 +58,13 @@ async function bootDevice({ hash = '' } = {}) {
         translate() {},
         rotate() {},
         fillRect() {},
+        fillText() {},
+        measureText() {
+          return { width: 10 };
+        },
+        rect() {},
+        roundRect() {},
+        clip() {},
         setLineDash() {},
       });
       window.scrollTo = () => {};
@@ -135,11 +142,15 @@ assert.equal(active(host), 's-draw', 'Host should transition to s-draw');
 assert.equal(active(guest), 's-draw', 'Guest should transition to s-draw simultaneously');
 console.log('  [PASS] Step 6: Host started game; both phones transitioned to s-draw');
 
-// 8. Open Drawing Pad & Test Drawing Tools (Sizes, Eraser, Palette, Undo)
+// 8. Open Drawing Pad & Test Drawing Tools (Sizes, Eraser, Palette, Undo, Peek Chip)
 click(host, 'duo-toggle');
 click(guest, 'duo-toggle');
 assert.ok(!$(host, 'duo-pad').hidden, 'Host drawing pad should be open');
 assert.ok(!$(guest, 'duo-pad').hidden, 'Guest drawing pad should be open');
+
+// Test peek word chip on drawing pad
+click(host, 'pad-word-chip');
+assert.equal($(host, 'pad-word-text').textContent, hostWord, 'Host pad-word-chip reveals secret word on tap');
 
 // Test tool switching
 click(host, 'pad-tool-eraser');
@@ -159,7 +170,7 @@ if (swatchGreen) click(host, swatchGreen);
 click(host, 'pad-undo');
 click(guest, 'pad-undo');
 
-console.log('  [PASS] Step 7: Drawing pad tools (brush sizes, eraser, palette, undo) verified');
+console.log('  [PASS] Step 7: Drawing pad tools (brush sizes, eraser, palette, undo, peek chip) verified');
 
 // 9. Accidental Navigation Protection Verification
 host.window.dispatchEvent(new host.window.Event('beforeunload'));
@@ -221,6 +232,7 @@ click(host, 'sh-close');
 assert.ok(!$(host, 'share-modal').classList.contains('on'), 'Share modal closed');
 
 click(host, 'reset'); // Go back to setup screen
+await new Promise((r) => setTimeout(r, 60));
 assert.equal(active(host), 's-setup');
 click(host, 'open-settings');
 assert.ok($(host, 'settings-modal').classList.contains('on'), 'Settings modal opens');

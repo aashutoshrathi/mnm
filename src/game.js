@@ -529,12 +529,31 @@ function startHostSyncedRound() {
   triggerSynchronizedCountdown(() => {
     S.endsAt = endsAt;
     runClock();
+    if (typeof openDuoPad === 'function') {
+      openDuoPad({
+        colorMode: 'red',
+        title: `${S.teams[0].name} Drawing Pad`,
+        opponentTitle: `${S.teams[1].name} (Other Team)`,
+        opponentColor: S.teams[1].color,
+        secretWord: S.card?.word || '',
+      });
+    }
   });
 }
 
 function startGuestSyncedRound() {
   startGuestRound();
-  triggerSynchronizedCountdown(() => {});
+  triggerSynchronizedCountdown(() => {
+    if (typeof openDuoPad === 'function') {
+      openDuoPad({
+        colorMode: 'blue',
+        title: `${S.teams[1].name} Drawing Pad`,
+        opponentTitle: `${S.teams[0].name} (Other Team)`,
+        opponentColor: S.teams[0].color,
+        secretWord: S.card?.word || '',
+      });
+    }
+  });
 }
 
 function handleP2PMessage(msg) {
@@ -1130,13 +1149,21 @@ function startRound(card) {
   $('got0').textContent = `${S.teams[0].name} got it`;
   $('got1').textContent = `${S.teams[1].name} got it`;
 
-  S.pinned = isGuest();
+  S.pinned = false;
   applyPeek();
 
   S.endsAt = Date.now() + S.len * 1000;
   S.pausedMs = null;
   show('s-draw');
   runClock();
+
+  if (!isSynced() && typeof openDuoPad === 'function') {
+    openDuoPad({
+      colorMode: 'split',
+      title: 'Shared Drawing Pad',
+      secretWord: S.card?.word || '',
+    });
+  }
 
   if (isHost() && typeof sendP2P === 'function') {
     sendP2P('START_ROUND', { round: S.round, endsAt: S.endsAt, len: S.len });
@@ -1848,13 +1875,14 @@ function wireEvents() {
   $('duo-toggle').onclick = () => {
     blip(500, 0.06);
     if (S.mode === 'solo') {
-      openDuoPad({ colorMode: 'split', title: 'Shared Drawing Pad' });
+      openDuoPad({ colorMode: 'split', title: 'Shared Drawing Pad', secretWord: S.card?.word || '' });
     } else if (S.mode === 'host') {
       openDuoPad({
         colorMode: 'red',
         title: `${S.teams[0].name} Drawing Pad`,
         opponentTitle: `${S.teams[1].name} (Other Team)`,
         opponentColor: S.teams[1].color,
+        secretWord: S.card?.word || '',
       });
     } else {
       openDuoPad({
@@ -1862,6 +1890,7 @@ function wireEvents() {
         title: `${S.teams[1].name} Drawing Pad`,
         opponentTitle: `${S.teams[0].name} (Other Team)`,
         opponentColor: S.teams[0].color,
+        secretWord: S.card?.word || '',
       });
     }
   };

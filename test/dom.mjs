@@ -381,7 +381,7 @@ await test('guest mode hides host-only controls on the draw screen', async () =>
   assert.ok(!visible(guest, 'got0'), 'guests do not score');
   assert.ok(!visible(guest, 'got1'), 'guests do not score');
   assert.ok(visible(guest, 'guest-done'), 'guests get a round-over button');
-  assert.ok($(guest, 'peek').classList.contains('showing'), 'guest word is pinned by default');
+  assert.ok(!$(guest, 'peek').classList.contains('showing'), 'guest word is hidden by default');
 
   host.window.close();
   guest.window.close();

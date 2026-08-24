@@ -419,6 +419,45 @@ body:not(.mode-synced) #show-invite { display: none; }
   min-width: 64px;
   transition: color .3s ease;
 }
+
+.pad-word-chip {
+  background: rgba(247, 244, 236, 0.08);
+  border: 1px solid rgba(247, 244, 236, 0.14);
+  color: rgba(247, 244, 236, 0.85);
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  max-width: 200px;
+}
+.pad-word-chip:hover {
+  background: rgba(247, 244, 236, 0.15);
+  color: var(--paper);
+}
+.pad-word-chip:active {
+  transform: scale(0.96);
+}
+.pad-word-chip.showing {
+  background: var(--yellow);
+  color: var(--ink);
+  border-color: var(--yellow);
+  font-family: var(--display);
+  font-weight: 800;
+}
+.pad-word-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pad-control-group {
   background: rgba(247, 244, 236, 0.08);
   border: 1px solid rgba(247, 244, 236, 0.12);
@@ -728,6 +767,9 @@ body:not(.mode-synced) #show-invite { display: none; }
   font-weight: 900;
   color: var(--paper);
   line-height: 1;
+  text-shadow: 0 0 40px rgba(255, 210, 63, .4);
+}
+
 /* ============================================================================
    Icon buttons, small segmented tabs, and settings controls
    ========================================================================= */
