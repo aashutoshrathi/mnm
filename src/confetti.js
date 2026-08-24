@@ -26,9 +26,20 @@ export function burstConfetti(primaryColor = '#FF4262', secondaryColor = '#3D9BF
   canvas.height = h * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+  const resolveHex = (c, fallback) => {
+    if (!c || typeof c !== 'string') return fallback;
+    if (c.includes('--red')) return '#FF4262';
+    if (c.includes('--blue')) return '#3D9BFF';
+    if (c.includes('--yellow')) return '#FFD23F';
+    return c.startsWith('#') || c.startsWith('rgb') ? c : fallback;
+  };
+
+  const pColor = resolveHex(primaryColor, '#FF4262');
+  const sColor = resolveHex(secondaryColor, '#3D9BFF');
+
   const colors = [
-    primaryColor,
-    secondaryColor,
+    pColor,
+    sColor,
     '#FFD700', // Gold
     '#2EE898', // Bright Emerald
     '#FFFFFF', // White

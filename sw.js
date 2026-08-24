@@ -1,15 +1,9 @@
 /**
- * sw.js - offline shell.
- *
- * Multi-device play is meant for places with no signal, which means a guest
- * following the invite QR must be able to load the app with the network down.
- * Everything is precached on install; the font stylesheet is cached at runtime
- * because it is cross-origin and opaque.
- *
- * Bump CACHE when shipping. Old caches are dropped on activate.
+ * sw.js - offline shell with automated cache busting.
+ * Cache Version: marker-mayhem-v-dce62f5a12
  */
 
-const CACHE = 'marker-mayhem-v5';
+const CACHE = 'marker-mayhem-v-dce62f5a12';
 
 const SHELL = [
   './',
@@ -22,6 +16,7 @@ const SHELL = [
   './src/words.js',
   './src/tally.js',
   './src/feedback.js',
+  './src/p2p.js',
   './src/duo.js',
   './src/storage.js',
   './src/storage-web.js',
@@ -30,13 +25,13 @@ const SHELL = [
   './src/joincode.js',
   './src/qr.js',
   './src/scan.js',
+  './src/confetti.js',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      // addAll is all-or-nothing; a single 404 would leave the app uncached
       .then((cache) => Promise.allSettled(SHELL.map((url) => cache.add(url))))
       .then(() => self.skipWaiting())
   );
@@ -48,6 +43,13 @@ self.addEventListener('activate', (event) => {
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => {
+        return self.clients.matchAll({ type: 'window' }).then((clients) => {
+          for (const client of clients) {
+            client.postMessage({ type: 'SW_UPDATED', cache: CACHE });
+          }
+        });
+      })
   );
 });
 
@@ -55,35 +57,47 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
-  // Navigations: network first so a deployed update is picked up, cache as
-  // the fallback so an offline guest still gets in.
-  if (request.mode === 'navigate') {
+  const url = new URL(request.url);
+
+  // For same-origin resources (HTML, JS, CSS, WebManifest):
+  // Use NETWORK-FIRST when online so updates are applied instantly,
+  // falling back to CACHE seamlessly when offline.
+  if (url.origin === self.location.origin) {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('./index.html', copy));
+          if (res && (res.ok || res.type === 'opaque')) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(request, copy));
+          }
           return res;
         })
-        .catch(() => caches.match('./index.html').then((r) => r || Response.error()))
+        .catch(() =>
+          caches.match(request).then((hit) => {
+            if (hit) return hit;
+            if (request.mode === 'navigate') {
+              return caches.match('./index.html').then((r) => r || caches.match('./'));
+            }
+            return Response.error();
+          })
+        )
     );
     return;
   }
 
-  // Everything else: cache first, since the shell is versioned by CACHE name.
+  // Cross-origin resources (e.g. Google Fonts): Stale-While-Revalidate
   event.respondWith(
-    caches.match(request).then(
-      (hit) =>
-        hit ||
-        fetch(request)
-          .then((res) => {
-            if (res.ok || res.type === 'opaque') {
-              const copy = res.clone();
-              caches.open(CACHE).then((c) => c.put(request, copy));
-            }
-            return res;
-          })
-          .catch(() => hit || Response.error())
-    )
+    caches.match(request).then((hit) => {
+      const fetchPromise = fetch(request)
+        .then((res) => {
+          if (res && (res.ok || res.type === 'opaque')) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(request, copy));
+          }
+          return res;
+        })
+        .catch(() => hit);
+      return hit || fetchPromise;
+    })
   );
 });

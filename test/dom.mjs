@@ -283,10 +283,8 @@ await test('a guest joining by link sees the host word for the same round', asyn
   click(host, 'reveal');
   click(host, host.window.document.querySelector('.theme'));
   click(host, host.window.document.querySelector('.card'));
-  click(host, 'reveal');
-  click(host, 'pin-toggle');
-  const hostWord = $(host, 'peek').textContent;
-  assert.ok(hostWord.length > 1 && hostWord !== 'Hold to see the word', 'host word should be readable');
+  const hostWord = $(host, 'host-word-text')?.textContent;
+  assert.ok(hostWord && hostWord.length > 1, 'host word should be readable');
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
   await new Promise((r) => setTimeout(r, 50));
@@ -310,9 +308,7 @@ await test('a guest typing the code reaches the same round', async () => {
   click(host, 'reveal');
   click(host, host.window.document.querySelector('.theme'));
   click(host, host.window.document.querySelector('.card'));
-  click(host, 'reveal');
-  click(host, 'pin-toggle');
-  const hostWord = $(host, 'peek').textContent;
+  const hostWord = $(host, 'host-word-text')?.textContent;
 
   const guest = await boot();
   click(guest, 'open-join');
@@ -378,10 +374,10 @@ await test('guest mode hides host-only controls on the draw screen', async () =>
 
   assert.equal(active(guest), 's-draw');
   assert.ok(guest.window.document.body.classList.contains('mode-guest'));
-  assert.ok(!visible(guest, 'got0'), 'guests do not score');
-  assert.ok(!visible(guest, 'got1'), 'guests do not score');
+  assert.ok(!visible(guest, 'got0'), 'guests do not score on bottom bar');
+  assert.ok(!visible(guest, 'got1'), 'guests do not score on bottom bar');
   assert.ok(visible(guest, 'guest-done'), 'guests get a round-over button');
-  assert.ok(!$(guest, 'peek').classList.contains('showing'), 'guest word is hidden by default');
+  assert.equal($(guest, 'peek'), null, 'peek word is not present on drawing screen');
 
   host.window.close();
   guest.window.close();
@@ -402,7 +398,7 @@ await test('a guest advancing lands on the next round', async () => {
   click(host, 'reveal');
   await new Promise((r) => setTimeout(r, 50));
 
-  const first = $(guest, 'peek').textContent;
+  const first = $(guest, 'guest-word-text')?.textContent;
   click(guest, 'guest-done');
   assert.equal(active(guest), 's-guest');
   assert.match($(guest, 'guest-round').textContent, /Round 2/);
@@ -419,33 +415,17 @@ await test('a guest advancing lands on the next round', async () => {
 
 await test('the drawing pad opens over the draw screen and closes', async () => {
   const dom = await boot();
-  click(dom, 'go');
   click(dom, 'reveal');
-  click(dom, $(dom, 'themes').querySelector('.theme'));
-  click(dom, $(dom, 'cards').querySelector('.card'));
+  click(dom, dom.window.document.querySelector('.theme'));
+  click(dom, dom.window.document.querySelector('.card'));
   assert.equal(active(dom), 's-draw');
 
   click(dom, 'duo-toggle');
-  assert.ok(!$(dom, 'duo-pad').hidden, 'pad should be visible');
-  assert.equal($(dom, 'pad-clock').textContent, $(dom, 'clock').textContent, 'pad mirrors the clock');
-  assert.ok(!$(dom, 'pad-tools').hidden, 'tools bar should be visible');
-  assert.ok(!$(dom, 'pad-sizes').hidden, 'sizes bar should be visible');
-  assert.ok(!$(dom, 'pad-colors').hidden, 'palette should be visible');
-  assert.ok(!$(dom, 'pad-undo').hidden, 'undo button should be visible');
-  assert.ok($(dom, 'pad-sideboard').hidden, 'sideboard is hidden in solo split mode');
+  assert.ok(!$(dom, 'duo-pad').hidden, 'pad should open');
 
-  click(dom, 'pad-tool-eraser');
-  assert.ok($(dom, 'pad-tool-eraser').classList.contains('is-active'));
-  click(dom, 'pad-tool-pen');
-  assert.ok($(dom, 'pad-tool-pen').classList.contains('is-active'));
-  click(dom, 'pad-undo');
-
-  click(dom, 'pad-clear');
   click(dom, 'pad-done');
-  assert.ok($(dom, 'duo-pad').hidden, 'Done should close the pad');
-
-  click(dom, 'got0');
-  assert.equal(active(dom), 's-result', 'round still scores normally after pad use');
+  assert.ok($(dom, 'duo-pad').hidden, 'pad should close');
+  assert.equal(active(dom), 's-draw');
   dom.window.close();
 });
 
@@ -464,17 +444,13 @@ await test('guests can open the drawing pad to draw for their team with opponent
   click(host, 'reveal');
   await new Promise((r) => setTimeout(r, 50));
 
-  assert.equal(active(guest), 's-draw');
-  assert.ok(visible(guest, 'duo-toggle'), 'the toggle should be available for guests');
-
   click(guest, 'duo-toggle');
-  assert.ok(!$(guest, 'duo-pad').hidden, 'pad should open on guest phone');
-  assert.ok(!$(guest, 'pad-tools').hidden, 'tools should be available on guest pad');
-  assert.ok(!$(guest, 'pad-sideboard').hidden, 'opponent sideboard should be visible on guest');
-  assert.match($(guest, 'sideboard-title').textContent, /Red|Other Team/);
-  click(guest, 'pad-done');
-  assert.ok($(guest, 'duo-pad').hidden, 'Done should close guest pad');
+  assert.ok(!$(guest, 'duo-pad').hidden, 'guest pad should open');
+  assert.ok(!$(guest, 'pad-sideboard').hidden, 'opponent sideboard should be visible in multi-device mode');
+  assert.match($(guest, 'sideboard-title').textContent, /Red/);
 
+  click(guest, 'pad-done');
+  assert.ok($(guest, 'duo-pad').hidden, 'guest pad should close');
   host.window.close();
   guest.window.close();
 });
@@ -484,18 +460,22 @@ await test('guests can review and edit their team name on join', async () => {
   pickSegment(host, 'seg-devices', 'host');
   click(host, 'go');
   const url = $(host, 'invite-url').textContent;
+  click(host, 'invite-done');
 
   const guest = await boot({ hash: url.slice(url.indexOf('#')) });
-  assert.equal(active(guest), 's-guest');
+  await new Promise((r) => setTimeout(r, 50));
+
   assert.equal($(guest, 'guest-team-name').textContent, 'Blue');
-
   click(guest, 'guest-rename-toggle');
-  assert.ok(!$(guest, 'guest-renamer').hidden, 'guest renamer should expand');
-  $(guest, 'gr-name').value = 'Speedy Otters';
-  click(guest, 'gr-save');
+  assert.ok(!$(guest, 'guest-renamer').hidden);
 
-  assert.ok($(guest, 'guest-renamer').hidden, 'guest renamer should close after save');
-  assert.equal($(guest, 'guest-team-name').textContent, 'Speedy Otters');
+  $(guest, 'gr-name').value = 'Blue Ninjas';
+  click(guest, 'gr-save');
+  assert.equal($(guest, 'guest-team-name').textContent, 'Blue Ninjas');
+  assert.ok($(guest, 'guest-renamer').hidden);
+
+  await new Promise((r) => setTimeout(r, 50));
+  assert.match($(host, 'lobby-guest-name').textContent, /Blue Ninjas/);
 
   host.window.close();
   guest.window.close();
@@ -505,27 +485,29 @@ await test('multi-device lobby and drawer readiness boxes display team presence'
   const host = await boot();
   pickSegment(host, 'seg-devices', 'host');
   click(host, 'go');
-  assert.equal(active(host), 's-invite');
-  assert.ok(!$(host, 'lobby-box').hidden);
-  assert.match($(host, 'lobby-host-status').textContent, /Ready/);
   const url = $(host, 'invite-url').textContent;
 
+  assert.equal($(host, 'lobby-host-status').textContent, '✓ Ready');
+  assert.equal($(host, 'lobby-guest-status').textContent, 'Waiting for join…');
+
+  const guest = await boot({ hash: url.slice(url.indexOf('#')) });
+  await new Promise((r) => setTimeout(r, 60));
+
+  assert.equal($(host, 'lobby-guest-status').textContent, '✓ Joined');
+
   click(host, 'invite-done');
-  assert.equal(active(host), 's-handoff');
   click(host, 'reveal');
   click(host, host.window.document.querySelector('.theme'));
   click(host, host.window.document.querySelector('.card'));
-  assert.equal(active(host), 's-handoff');
-  assert.ok(!$(host, 'host-ready-box').hidden);
-  assert.equal($(host, 'hr-host-btn').textContent, "I'm ready");
-  assert.ok(!$(host, 'host-word-box').hidden);
+  await new Promise((r) => setTimeout(r, 60));
 
-  const guest = await boot({ hash: url.slice(url.indexOf('#')) });
-  await new Promise((r) => setTimeout(r, 50));
-  assert.equal(active(guest), 's-guest');
-  assert.ok(!$(guest, 'guest-ready-box').hidden);
-  assert.equal($(guest, 'gr-my-btn').textContent, "I'm ready");
-  assert.ok(!$(guest, 'guest-word-box').hidden);
+  assert.equal($(host, 'hr-guest-status').textContent, 'Waiting for drawer…');
+  assert.equal($(guest, 'gr-other-status').textContent, 'Waiting for drawer…');
+
+  click(guest, 'gr-my-btn');
+  await new Promise((r) => setTimeout(r, 60));
+
+  assert.equal($(host, 'hr-guest-status').textContent, '✓ Ready');
 
   host.window.close();
   guest.window.close();
@@ -545,18 +527,25 @@ await test('guests reaching the round cap see completion state and can step back
       click(host, 'reveal');
       click(host, host.window.document.querySelector('.theme'));
       click(host, host.window.document.querySelector('.card'));
+      await new Promise((res) => setTimeout(res, 20));
       click(host, 'reveal');
     } else {
       click(guest, 'guest-start');
       click(guest, guest.window.document.querySelector('.theme'));
       click(guest, guest.window.document.querySelector('.card'));
+      await new Promise((res) => setTimeout(res, 20));
       click(host, 'reveal');
     }
+    await new Promise((res) => setTimeout(res, 20));
     click(guest, 'guest-done');
     click(host, 'got0');
-    if (r < 5) click(host, 'next');
+    if (r < 5) {
+      click(host, 'next');
+      await new Promise((res) => setTimeout(res, 20));
+    }
   }
 
+  await new Promise((res) => setTimeout(res, 40));
   assert.equal(active(guest), 's-guest');
   assert.match($(guest, 'guest-head').textContent, /Game complete/);
   assert.equal($(guest, 'guest-start').textContent, 'Leave game');

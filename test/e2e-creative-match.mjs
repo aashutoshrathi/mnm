@@ -243,11 +243,9 @@ click(guest, 'duo-toggle');
 assert.ok(!$(host, 'duo-pad').hidden, 'Host drawing pad is active');
 assert.ok(!$(guest, 'duo-pad').hidden, 'Guest drawing pad is active');
 
-// Test discrete word peek chip inside drawing pad
-click(host, 'pad-word-chip');
-assert.equal($(host, 'pad-word-text').textContent, round1Word, 'Host peek chip reveals secret word');
-click(guest, 'pad-word-chip');
-assert.equal($(guest, 'pad-word-text').textContent, round1Word, 'Guest peek chip reveals secret word');
+// Verify secret word is not peekable inside drawing pad for room privacy
+assert.equal($(host, 'pad-word-chip'), null);
+assert.equal($(guest, 'pad-word-chip'), null);
 
 // Host draws a rocket with pen tool
 drawFakeStroke(host, {

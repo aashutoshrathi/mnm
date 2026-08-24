@@ -14,7 +14,7 @@
     "test:dom": "node build.mjs && node test/dom.mjs",
     "test:e2e": "node build.mjs && node test/e2e-multidevice.mjs",
     "test:creative": "node build.mjs && node test/e2e-creative-match.mjs",
-    "test:all": "npm run test && npm run test:dom && node test/e2e-multidevice.mjs && node test/e2e-creative-match.mjs",
+    "test:all": "npm run test && npm run test:dom && node test/e2e-multidevice.mjs && node test/e2e-creative-match.mjs && node test/e2e-twoplayer-fixes.mjs",
     "start": "node build.mjs && python3 -m http.server 8080"
   },
   "devDependencies": {
