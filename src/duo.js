@@ -8,7 +8,7 @@
  * Multi-device mode (phone per team):
  *   Each team draws on a major full-screen board in their team color (Red on host,
  *   Blue on guest), while a compact read-only sideboard displays the opponent's
- *   live strokes in real time via BroadcastChannel without blocking local drawing.
+ *   live strokes in real time via BroadcastChannel and WebSocket MQTT relay.
  *
  * In all modes, the secret word is deliberately not shown on the drawing pad
  * so guessers in the room can look directly at the phone screen without seeing
@@ -20,10 +20,11 @@ import { sendP2P } from './p2p.js';
 const PAD_TOP_INK = '#FF4262';
 const PAD_BOTTOM_INK = '#3D9BFF';
 const PAD_DIVIDER = 'rgba(247,244,236,.28)';
-const PAD_STROKE_W = 4;
-const SIDEBOARD_STROKE_W = 2.5;
 
-/** pointerId -> {x, y, color}; multi-touch means several can be live at once. */
+const PEN_SIZES = { sm: 2.5, md: 5, lg: 9 };
+const ERASER_SIZES = { sm: 16, md: 26, lg: 40 };
+
+/** pointerId -> {x, y, color, width, tool, segments}; multi-touch supported. */
 const padPointers = new Map();
 
 let padCanvas = null;
@@ -34,6 +35,13 @@ let padShown = false;
 let padColorMode = 'split'; // 'split' | 'red' | 'blue'
 let streamChannel = null;
 
+let currentTool = 'pen'; // 'pen' | 'eraser'
+let currentSize = 'md'; // 'sm' | 'md' | 'lg'
+let currentColor = 'team'; // 'team' | hex string
+
+const strokeHistory = [];
+const opponentStrokeHistory = [];
+
 function padEl(id) {
   return document.getElementById(id);
 }
@@ -42,10 +50,16 @@ export function duoPadIsOpen() {
   return padShown;
 }
 
-function inkFor(y, height) {
+function resolveColor(y, height) {
+  if (currentTool === 'eraser') return 'eraser';
+  if (currentColor !== 'team') return currentColor;
   if (padColorMode === 'red') return PAD_TOP_INK;
   if (padColorMode === 'blue') return PAD_BOTTOM_INK;
   return y < height / 2 ? PAD_TOP_INK : PAD_BOTTOM_INK;
+}
+
+function resolveWidth() {
+  return currentTool === 'eraser' ? ERASER_SIZES[currentSize] : PEN_SIZES[currentSize];
 }
 
 function padPos(e) {
@@ -75,6 +89,17 @@ function applyPadModeUI(opponentTitle = '', opponentColor = '') {
   if (topLabel) topLabel.hidden = !isSplit;
   if (bottomLabel) bottomLabel.hidden = !isSplit;
 
+  const swatchTeam = padEl('swatch-team');
+  if (swatchTeam) {
+    if (padColorMode === 'red') {
+      swatchTeam.style.background = PAD_TOP_INK;
+    } else if (padColorMode === 'blue') {
+      swatchTeam.style.background = PAD_BOTTOM_INK;
+    } else {
+      swatchTeam.style.background = 'linear-gradient(135deg, #FF4262 50%, #3D9BFF 50%)';
+    }
+  }
+
   const sideboard = padEl('pad-sideboard');
   if (sideboard) {
     sideboard.hidden = isSplit;
@@ -88,6 +113,73 @@ function applyPadModeUI(opponentTitle = '', opponentColor = '') {
         dotEl.style.background = opponentColor || (padColorMode === 'red' ? PAD_BOTTOM_INK : PAD_TOP_INK);
       }
     }
+  }
+}
+
+function redrawPadCanvas() {
+  if (!padCtx || !padCanvas) return;
+  const rect = padCanvas.getBoundingClientRect();
+  padCtx.clearRect(0, 0, rect.width, rect.height);
+  drawDivider(rect.width, rect.height);
+
+  for (const s of strokeHistory) {
+    if (!s || !s.segments || s.segments.length === 0) continue;
+    padCtx.save();
+    if (s.tool === 'eraser') {
+      padCtx.globalCompositeOperation = 'destination-out';
+      padCtx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      padCtx.globalCompositeOperation = 'source-over';
+      padCtx.strokeStyle = s.color;
+    }
+    padCtx.lineWidth = s.width;
+    padCtx.lineCap = 'round';
+    padCtx.lineJoin = 'round';
+
+    for (const seg of s.segments) {
+      const ax = seg.aNorm.x * rect.width;
+      const ay = seg.aNorm.y * rect.height;
+      const bx = seg.bNorm.x * rect.width;
+      const by = seg.bNorm.y * rect.height;
+      padCtx.beginPath();
+      padCtx.moveTo(ax, ay);
+      padCtx.lineTo(bx + 0.01, by + 0.01);
+      padCtx.stroke();
+    }
+    padCtx.restore();
+  }
+}
+
+function redrawSideboardCanvas() {
+  if (!sideboardCtx || !sideboardCanvas) return;
+  const rect = sideboardCanvas.getBoundingClientRect();
+  sideboardCtx.clearRect(0, 0, rect.width, rect.height);
+
+  for (const s of opponentStrokeHistory) {
+    if (!s || !s.segments || s.segments.length === 0) continue;
+    sideboardCtx.save();
+    if (s.tool === 'eraser') {
+      sideboardCtx.globalCompositeOperation = 'destination-out';
+      sideboardCtx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      sideboardCtx.globalCompositeOperation = 'source-over';
+      sideboardCtx.strokeStyle = s.color;
+    }
+    sideboardCtx.lineWidth = Math.max(1.5, s.width * 0.4);
+    sideboardCtx.lineCap = 'round';
+    sideboardCtx.lineJoin = 'round';
+
+    for (const seg of s.segments) {
+      const ax = seg.aNorm.x * rect.width;
+      const ay = seg.aNorm.y * rect.height;
+      const bx = seg.bNorm.x * rect.width;
+      const by = seg.bNorm.y * rect.height;
+      sideboardCtx.beginPath();
+      sideboardCtx.moveTo(ax, ay);
+      sideboardCtx.lineTo(bx + 0.01, by + 0.01);
+      sideboardCtx.stroke();
+    }
+    sideboardCtx.restore();
   }
 }
 
@@ -108,32 +200,10 @@ function padLayout() {
     return;
   }
 
-  const oldW = padCanvas.width;
-  const oldH = padCanvas.height;
-  let backup = null;
-  if (oldW > 0 && oldH > 0) {
-    backup = document.createElement('canvas');
-    backup.width = oldW;
-    backup.height = oldH;
-    const bCtx = backup.getContext('2d');
-    if (bCtx) {
-      bCtx.drawImage(padCanvas, 0, 0);
-    }
-  }
-
   padCanvas.width = w;
   padCanvas.height = h;
   padCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  padCtx.clearRect(0, 0, rect.width, rect.height);
-  drawDivider(rect.width, rect.height);
-
-  if (backup) {
-    padCtx.save();
-    padCtx.setTransform(1, 0, 0, 1, 0, 0);
-    padCtx.drawImage(backup, 0, 0, w, h);
-    padCtx.restore();
-  }
-
+  redrawPadCanvas();
   sideboardLayout();
 }
 
@@ -149,30 +219,10 @@ function sideboardLayout() {
     return;
   }
 
-  const oldW = sideboardCanvas.width;
-  const oldH = sideboardCanvas.height;
-  let backup = null;
-  if (oldW > 0 && oldH > 0) {
-    backup = document.createElement('canvas');
-    backup.width = oldW;
-    backup.height = oldH;
-    const bCtx = backup.getContext('2d');
-    if (bCtx) {
-      bCtx.drawImage(sideboardCanvas, 0, 0);
-    }
-  }
-
   sideboardCanvas.width = w;
   sideboardCanvas.height = h;
   sideboardCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  sideboardCtx.clearRect(0, 0, rect.width, rect.height);
-
-  if (backup) {
-    sideboardCtx.save();
-    sideboardCtx.setTransform(1, 0, 0, 1, 0, 0);
-    sideboardCtx.drawImage(backup, 0, 0, w, h);
-    sideboardCtx.restore();
-  }
+  redrawSideboardCanvas();
 }
 
 let strokeBatch = [];
@@ -186,11 +236,13 @@ function flushStrokeBatch() {
   strokeBatch = [];
 }
 
-function queueStroke(aNorm, bNorm, color) {
+function queueStroke(aNorm, bNorm, color, width, tool) {
   strokeBatch.push({
     a: { x: Math.round(aNorm.x * 1000) / 1000, y: Math.round(aNorm.y * 1000) / 1000 },
     b: { x: Math.round(bNorm.x * 1000) / 1000, y: Math.round(bNorm.y * 1000) / 1000 },
     c: color,
+    w: width,
+    t: tool,
   });
   if (!strokeFlushTimer) {
     strokeFlushTimer = setTimeout(() => {
@@ -200,56 +252,72 @@ function queueStroke(aNorm, bNorm, color) {
   }
 }
 
-function padStroke(a, b, color) {
+function padStroke(a, b, color, width, tool = 'pen') {
   if (!padCtx) {
     return;
   }
-  padCtx.strokeStyle = color;
-  padCtx.lineWidth = PAD_STROKE_W;
+  padCtx.save();
+  if (tool === 'eraser') {
+    padCtx.globalCompositeOperation = 'destination-out';
+    padCtx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    padCtx.globalCompositeOperation = 'source-over';
+    padCtx.strokeStyle = color;
+  }
+  padCtx.lineWidth = width;
   padCtx.lineCap = 'round';
   padCtx.lineJoin = 'round';
   padCtx.beginPath();
   padCtx.moveTo(a.x, a.y);
   padCtx.lineTo(b.x + 0.01, b.y + 0.01);
   padCtx.stroke();
+  padCtx.restore();
 
   if (padCanvas) {
     const rect = padCanvas.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
       const aNorm = { x: a.x / rect.width, y: a.y / rect.height };
       const bNorm = { x: b.x / rect.width, y: b.y / rect.height };
-      queueStroke(aNorm, bNorm, color);
+      queueStroke(aNorm, bNorm, color, width, tool);
       if (streamChannel) {
         try {
-          streamChannel.postMessage({ type: 'stroke', from: padColorMode, aNorm, bNorm, color });
+          streamChannel.postMessage({ type: 'stroke', from: padColorMode, aNorm, bNorm, color, width, tool });
         } catch (err) {}
       }
     }
   }
 }
 
-function sideboardStroke(a, b, color) {
+function sideboardStroke(a, b, color, width = 4, tool = 'pen') {
   if (!sideboardCtx) {
     return;
   }
-  sideboardCtx.strokeStyle = color;
-  sideboardCtx.lineWidth = SIDEBOARD_STROKE_W;
+  sideboardCtx.save();
+  if (tool === 'eraser') {
+    sideboardCtx.globalCompositeOperation = 'destination-out';
+    sideboardCtx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    sideboardCtx.globalCompositeOperation = 'source-over';
+    sideboardCtx.strokeStyle = color;
+  }
+  sideboardCtx.lineWidth = Math.max(1.5, width * 0.4);
   sideboardCtx.lineCap = 'round';
   sideboardCtx.lineJoin = 'round';
   sideboardCtx.beginPath();
   sideboardCtx.moveTo(a.x, a.y);
   sideboardCtx.lineTo(b.x + 0.01, b.y + 0.01);
   sideboardCtx.stroke();
+  sideboardCtx.restore();
 }
 
-export function renderIncomingStroke(from, aNorm, bNorm, color) {
+export function renderIncomingStroke(from, aNorm, bNorm, color, width = 4, tool = 'pen') {
   if (!sideboardCtx || !sideboardCanvas || from === padColorMode) {
     return;
   }
   const rect = sideboardCanvas.getBoundingClientRect();
   const sa = { x: aNorm.x * rect.width, y: aNorm.y * rect.height };
   const sb = { x: bNorm.x * rect.width, y: bNorm.y * rect.height };
-  sideboardStroke(sa, sb, color);
+  sideboardStroke(sa, sb, color, width, tool);
 }
 
 export function renderIncomingBatch(from, pts = []) {
@@ -261,14 +329,47 @@ export function renderIncomingBatch(from, pts = []) {
     if (!item || !item.a || !item.b) continue;
     const sa = { x: item.a.x * rect.width, y: item.a.y * rect.height };
     const sb = { x: item.b.x * rect.width, y: item.b.y * rect.height };
-    sideboardStroke(sa, sb, item.c || PAD_TOP_INK);
+    const tool = item.t || 'pen';
+    const color = item.c || PAD_TOP_INK;
+    const width = item.w || 4;
+    sideboardStroke(sa, sb, color, width, tool);
+
+    opponentStrokeHistory.push({
+      tool,
+      color,
+      width,
+      segments: [{ aNorm: item.a, bNorm: item.b }],
+    });
   }
+}
+
+export function undoPad() {
+  if (strokeHistory.length === 0) return;
+  strokeHistory.pop();
+  redrawPadCanvas();
+  if (typeof sendP2P === 'function') {
+    sendP2P('UNDO', { from: padColorMode });
+  }
+  if (streamChannel) {
+    try {
+      streamChannel.postMessage({ type: 'undo', from: padColorMode });
+    } catch (err) {}
+  }
+}
+
+export function renderIncomingUndo(from) {
+  if (from === padColorMode) return;
+  if (opponentStrokeHistory.length > 0) {
+    opponentStrokeHistory.pop();
+  }
+  redrawSideboardCanvas();
 }
 
 function clearPad() {
   if (!padCtx || !padCanvas) {
     return;
   }
+  strokeHistory.length = 0;
   const rect = padCanvas.getBoundingClientRect();
   padCtx.clearRect(0, 0, rect.width, rect.height);
   drawDivider(rect.width, rect.height);
@@ -288,6 +389,7 @@ export function clearIncomingSideboard(from) {
   if (from === padColorMode) {
     return;
   }
+  opponentStrokeHistory.length = 0;
   if (!sideboardCtx || !sideboardCanvas) {
     return;
   }
@@ -297,7 +399,6 @@ export function clearIncomingSideboard(from) {
 
 export function openDuoPad({
   colorMode = 'split',
-  title = 'Drawing Sheet',
   opponentTitle = '',
   opponentColor = '',
 } = {}) {
@@ -305,8 +406,6 @@ export function openDuoPad({
   padShown = true;
   const pad = padEl('duo-pad');
   if (pad) pad.hidden = false;
-  const titleEl = padEl('pad-title');
-  if (titleEl) titleEl.textContent = title;
   applyPadModeUI(opponentTitle, opponentColor);
   requestAnimationFrame(padLayout);
 }
@@ -343,7 +442,15 @@ export function wireDuoPad() {
           const rect = sideboardCanvas.getBoundingClientRect();
           const sa = { x: msg.aNorm.x * rect.width, y: msg.aNorm.y * rect.height };
           const sb = { x: msg.bNorm.x * rect.width, y: msg.bNorm.y * rect.height };
-          sideboardStroke(sa, sb, msg.color);
+          sideboardStroke(sa, sb, msg.color, msg.width, msg.tool);
+          opponentStrokeHistory.push({
+            tool: msg.tool,
+            color: msg.color,
+            width: msg.width,
+            segments: [{ aNorm: msg.aNorm, bNorm: msg.bNorm }],
+          });
+        } else if (msg.type === 'undo') {
+          renderIncomingUndo(msg.from);
         } else if (msg.type === 'clear') {
           clearIncomingSideboard(msg.from);
         }
@@ -352,6 +459,45 @@ export function wireDuoPad() {
       streamChannel = null;
     }
   }
+
+  const penBtn = padEl('pad-tool-pen');
+  const eraserBtn = padEl('pad-tool-eraser');
+  if (penBtn && eraserBtn) {
+    penBtn.onclick = () => {
+      currentTool = 'pen';
+      penBtn.classList.add('is-active');
+      eraserBtn.classList.remove('is-active');
+    };
+    eraserBtn.onclick = () => {
+      currentTool = 'eraser';
+      eraserBtn.classList.add('is-active');
+      penBtn.classList.remove('is-active');
+    };
+  }
+
+  const sizeBtns = document.querySelectorAll('.pad-size-btn');
+  sizeBtns.forEach((btn) => {
+    btn.onclick = () => {
+      sizeBtns.forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      currentSize = btn.dataset.size || 'md';
+    };
+  });
+
+  const swatches = document.querySelectorAll('.pad-color-swatch');
+  swatches.forEach((swatch) => {
+    swatch.onclick = () => {
+      swatches.forEach((s) => s.classList.remove('is-active'));
+      swatch.classList.add('is-active');
+      currentColor = swatch.dataset.color || 'team';
+      currentTool = 'pen';
+      if (penBtn) penBtn.classList.add('is-active');
+      if (eraserBtn) eraserBtn.classList.remove('is-active');
+    };
+  });
+
+  const undoBtn = padEl('pad-undo');
+  if (undoBtn) undoBtn.onclick = undoPad;
 
   const clearBtn = padEl('pad-clear');
   if (clearBtn) clearBtn.onclick = clearPad;
@@ -366,14 +512,24 @@ export function wireDuoPad() {
       e.preventDefault();
       const p = padPos(e);
       const rect = padCanvas.getBoundingClientRect();
-      const color = inkFor(p.y, rect.height);
-      padPointers.set(e.pointerId, { ...p, color });
+      const color = resolveColor(p.y, rect.height);
+      const width = resolveWidth();
+      const tool = currentTool;
+
+      const currentStroke = {
+        tool,
+        color,
+        width,
+        segments: [],
+      };
+
+      padPointers.set(e.pointerId, { ...p, color, width, tool, stroke: currentStroke });
       try {
         padCanvas.setPointerCapture(e.pointerId);
       } catch (err) {
         /* capture is a nicety; drawing works without it */
       }
-      padStroke(p, p, color);
+      padStroke(p, p, color, width, tool);
     });
 
     padCanvas.addEventListener('pointermove', (e) => {
@@ -383,15 +539,31 @@ export function wireDuoPad() {
       }
       e.preventDefault();
       const p = padPos(e);
-      padStroke(last, p, last.color);
+      const rect = padCanvas.getBoundingClientRect();
+      padStroke(last, p, last.color, last.width, last.tool);
+
+      if (rect.width > 0 && rect.height > 0) {
+        const aNorm = { x: last.x / rect.width, y: last.y / rect.height };
+        const bNorm = { x: p.x / rect.width, y: p.y / rect.height };
+        if (last.stroke) {
+          last.stroke.segments.push({ aNorm, bNorm });
+        }
+      }
+
       last.x = p.x;
       last.y = p.y;
     });
 
+    const endPointer = (e) => {
+      const last = padPointers.get(e.pointerId);
+      if (last && last.stroke && last.stroke.segments.length > 0) {
+        strokeHistory.push(last.stroke);
+      }
+      padPointers.delete(e.pointerId);
+    };
+
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => {
-      padCanvas.addEventListener(ev, (e) => {
-        padPointers.delete(e.pointerId);
-      });
+      padCanvas.addEventListener(ev, endPointer);
     });
 
     padCanvas.addEventListener('contextmenu', (e) => {
@@ -405,3 +577,4 @@ export function wireDuoPad() {
     }
   });
 }
+

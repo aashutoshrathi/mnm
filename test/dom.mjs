@@ -173,6 +173,7 @@ await test('the round cap ends the game', async () => {
   }
   assert.equal(active(dom), 's-win');
   assert.match($(dom, 'win-line').textContent, /All 5 rounds played/);
+  assert.ok($(dom, 'confetti-canvas'), 'confetti canvas should exist on win screen');
   dom.window.close();
 });
 
@@ -427,8 +428,17 @@ await test('the drawing pad opens over the draw screen and closes', async () => 
   click(dom, 'duo-toggle');
   assert.ok(!$(dom, 'duo-pad').hidden, 'pad should be visible');
   assert.equal($(dom, 'pad-clock').textContent, $(dom, 'clock').textContent, 'pad mirrors the clock');
-  assert.match($(dom, 'pad-title').textContent, /Drawing Pad/);
+  assert.ok(!$(dom, 'pad-tools').hidden, 'tools bar should be visible');
+  assert.ok(!$(dom, 'pad-sizes').hidden, 'sizes bar should be visible');
+  assert.ok(!$(dom, 'pad-colors').hidden, 'palette should be visible');
+  assert.ok(!$(dom, 'pad-undo').hidden, 'undo button should be visible');
   assert.ok($(dom, 'pad-sideboard').hidden, 'sideboard is hidden in solo split mode');
+
+  click(dom, 'pad-tool-eraser');
+  assert.ok($(dom, 'pad-tool-eraser').classList.contains('is-active'));
+  click(dom, 'pad-tool-pen');
+  assert.ok($(dom, 'pad-tool-pen').classList.contains('is-active'));
+  click(dom, 'pad-undo');
 
   click(dom, 'pad-clear');
   click(dom, 'pad-done');
@@ -459,7 +469,7 @@ await test('guests can open the drawing pad to draw for their team with opponent
 
   click(guest, 'duo-toggle');
   assert.ok(!$(guest, 'duo-pad').hidden, 'pad should open on guest phone');
-  assert.match($(guest, 'pad-title').textContent, /Drawing Pad/);
+  assert.ok(!$(guest, 'pad-tools').hidden, 'tools should be available on guest pad');
   assert.ok(!$(guest, 'pad-sideboard').hidden, 'opponent sideboard should be visible on guest');
   assert.match($(guest, 'sideboard-title').textContent, /Red|Other Team/);
   click(guest, 'pad-done');

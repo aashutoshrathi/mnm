@@ -60,6 +60,51 @@ export function tock(freq, vol) {
   }
 }
 
+/** Game timer expiry buzzer tone with haptics. */
+export function buzzer() {
+  if (settings.haptics) buzz([80, 50, 140]);
+  if (!settings.sound) return;
+  try {
+    const c = ctx();
+    const t = c.currentTime;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(220, t);
+    o.frequency.linearRampToValueAtTime(180, t + 0.38);
+    g.gain.setValueAtTime(0.08, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.connect(g);
+    g.connect(c.destination);
+    o.start(t);
+    o.stop(t + 0.42);
+  } catch (e) {}
+}
+
+/** Triumphant major arpeggio fanfare for game victory. */
+export function victoryFanfare() {
+  if (settings.haptics) buzz([40, 30, 40, 30, 100]);
+  if (!settings.sound) return;
+  try {
+    const c = ctx();
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+    notes.forEach((freq, idx) => {
+      const t = c.currentTime + idx * 0.11;
+      const dur = idx === notes.length - 1 ? 0.7 : 0.22;
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.09, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g);
+      g.connect(c.destination);
+      o.start(t);
+      o.stop(t + dur);
+    });
+  } catch (e) {}
+}
+
 /* -------------------------------------------------------------- haptics -- */
 
 export function buzz(pattern) {
