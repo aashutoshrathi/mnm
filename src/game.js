@@ -18,9 +18,20 @@ import { ALL_THEMES, THEMES, mashupWord, poolSize, TIER_LADDER } from './words.j
 import { pick, shuffle } from './rng.js';
 import { createStore, ADAPTERS } from './storage.js';
 import { webAdapter, sessionAdapter } from './storage-web.js';
-import { blip, tock, buzz, buzzer, victoryFanfare, settings, wireButtonHaptics, hapticsSupported } from './feedback.js';
+import {
+  blip,
+  tock,
+  buzz,
+  buzzer,
+  victoryFanfare,
+  settings,
+  loadSettings,
+  saveSettings,
+  wireButtonHaptics,
+  hapticsSupported,
+} from './feedback.js';
 import { tallySVG } from './tally.js';
-import { renderShareCard, exportCard, fontsReady } from './share.js';
+import { renderShareCard, renderGalleryCard, exportCard, fontsReady } from './share.js';
 import { roundFor, syncCode, resetReplay } from './sync.js';
 import {
   newSeed,
@@ -37,6 +48,8 @@ import {
   openDuoPad,
   closeDuoPad,
   resetDuoPad,
+  getPadSnapshot,
+  getCurrentStrokes,
   renderIncomingStroke,
   renderIncomingBatch,
   renderIncomingUndo,
@@ -516,12 +529,31 @@ function startHostSyncedRound() {
   triggerSynchronizedCountdown(() => {
     S.endsAt = endsAt;
     runClock();
+    if (typeof openDuoPad === 'function') {
+      openDuoPad({
+        colorMode: 'red',
+        title: `${S.teams[0].name} Drawing Pad`,
+        opponentTitle: `${S.teams[1].name} (Other Team)`,
+        opponentColor: S.teams[1].color,
+        secretWord: S.card?.word || '',
+      });
+    }
   });
 }
 
 function startGuestSyncedRound() {
   startGuestRound();
-  triggerSynchronizedCountdown(() => {});
+  triggerSynchronizedCountdown(() => {
+    if (typeof openDuoPad === 'function') {
+      openDuoPad({
+        colorMode: 'blue',
+        title: `${S.teams[1].name} Drawing Pad`,
+        opponentTitle: `${S.teams[0].name} (Other Team)`,
+        opponentColor: S.teams[0].color,
+        secretWord: S.card?.word || '',
+      });
+    }
+  });
 }
 
 function handleP2PMessage(msg) {
@@ -697,6 +729,12 @@ function handleP2PMessage(msg) {
         stopClock();
         if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
         if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        if (Array.isArray(msg.history)) {
+          S.history = msg.history;
+        } else if (S.card) {
+          const strokes = typeof getCurrentStrokes === 'function' ? getCurrentStrokes() : [];
+          S.history.push({ r: msg.round, w: S.card.word, t: S.theme?.name || '', win: msg.winner, p: msg.pts, strokes });
+        }
         if (msg.winner === null) {
           $('res-eyebrow').textContent = `Round ${msg.round}`;
           $('verdict').textContent = 'Nobody got it';
@@ -1111,13 +1149,21 @@ function startRound(card) {
   $('got0').textContent = `${S.teams[0].name} got it`;
   $('got1').textContent = `${S.teams[1].name} got it`;
 
-  S.pinned = isGuest();
+  S.pinned = false;
   applyPeek();
 
   S.endsAt = Date.now() + S.len * 1000;
   S.pausedMs = null;
   show('s-draw');
   runClock();
+
+  if (!isSynced() && typeof openDuoPad === 'function') {
+    openDuoPad({
+      colorMode: 'split',
+      title: 'Shared Drawing Pad',
+      secretWord: S.card?.word || '',
+    });
+  }
 
   if (isHost() && typeof sendP2P === 'function') {
     sendP2P('START_ROUND', { round: S.round, endsAt: S.endsAt, len: S.len });
@@ -1157,7 +1203,8 @@ function finishRound(winner) {
     $('verdict').style.color = S.teams[winner].color;
   }
 
-  S.history.push({ r: S.round, w: S.card.word, t: S.theme.name, win: winner, p: pts });
+  const strokes = typeof getCurrentStrokes === 'function' ? getCurrentStrokes() : [];
+  S.history.push({ r: S.round, w: S.card.word, t: S.theme.name, win: winner, p: pts, strokes });
   $('res-word').textContent = S.card.word;
   renderBoard($('board2'));
   persist();
@@ -1546,27 +1593,29 @@ async function offerRejoin() {
 
 /* ================================================================== share */
 
-async function openShare() {
-  const modal = $('share-modal');
+let activeShareTab = 'tally';
+
+async function updateShareCard() {
   const shot = $('shot');
   shot.innerHTML = '';
   $('sh-hint').textContent = 'Rendering…';
-  modal.classList.add('on');
 
   await fontsReady();
-  const canvas = renderShareCard({
+  const gameData = {
     teams: S.teams.map((t, i) => ({ name: t.name, score: t.score, color: TEAM_HEX[i] })),
     rounds: S.history.length,
     wordsUsed: isSynced() ? S.history.length : S.used.size,
     reason: S.endReason,
     history: S.history,
-  });
+  };
 
+  const canvas = activeShareTab === 'gallery' ? renderGalleryCard(gameData) : renderShareCard(gameData);
   shot.appendChild(canvas);
   $('sh-hint').textContent = 'Long-press the image to save it, or use the button below.';
 
   $('sh-share').onclick = async () => {
-    const result = await exportCard(canvas, `marker-mayhem-${Date.now()}.png`);
+    const filename = `marker-mayhem-${activeShareTab}-${Date.now()}.png`;
+    const result = await exportCard(canvas, filename);
     if (result === 'shared') {
       toast('Shared');
     } else if (result === 'downloaded') {
@@ -1577,11 +1626,144 @@ async function openShare() {
   };
 }
 
+async function openShare() {
+  const modal = $('share-modal');
+  modal.classList.add('on');
+  activeShareTab = 'tally';
+  const tabTally = $('tab-tally');
+  const tabGallery = $('tab-gallery');
+  if (tabTally) tabTally.classList.add('is-active');
+  if (tabGallery) tabGallery.classList.remove('is-active');
+
+  await updateShareCard();
+}
+
 const closeShare = () => $('share-modal').classList.remove('on');
+
+/* =============================================================== settings */
+
+function openSettings() {
+  const modal = $('settings-modal');
+  if (!modal) return;
+  loadSettings();
+
+  const soundToggle = $('set-sound');
+  if (soundToggle) soundToggle.checked = settings.sound;
+
+  const volumeSlider = $('set-volume');
+  const volumeVal = $('set-volume-val');
+  if (volumeSlider) {
+    volumeSlider.value = Math.round((settings.volume || 0.75) * 100);
+    if (volumeVal) volumeVal.textContent = `${volumeSlider.value}%`;
+  }
+
+  const buzzerToggle = $('set-buzzer');
+  if (buzzerToggle) buzzerToggle.checked = settings.buzzer;
+
+  const fanfareToggle = $('set-fanfare');
+  if (fanfareToggle) fanfareToggle.checked = settings.fanfare;
+
+  const hapticsRow = $('haptics-row');
+  const hapticsToggle = $('set-haptics');
+  if (hapticsRow) {
+    hapticsRow.hidden = !hapticsSupported;
+  }
+  if (hapticsToggle) {
+    hapticsToggle.checked = settings.haptics;
+  }
+
+  modal.classList.add('on');
+}
+
+function closeSettings() {
+  const modal = $('settings-modal');
+  if (modal) modal.classList.remove('on');
+}
+
+function wireSettings() {
+  const openBtn = $('open-settings');
+  if (openBtn) openBtn.onclick = openSettings;
+
+  const closeBtn = $('settings-close');
+  if (closeBtn) closeBtn.onclick = closeSettings;
+
+  const modal = $('settings-modal');
+  if (modal) {
+    modal.onclick = (e) => e.target === modal && closeSettings();
+  }
+
+  const soundToggle = $('set-sound');
+  if (soundToggle) {
+    soundToggle.onchange = () => {
+      settings.sound = soundToggle.checked;
+      saveSettings();
+      if (settings.sound) blip(520, 0.05);
+    };
+  }
+
+  const volumeSlider = $('set-volume');
+  const volumeVal = $('set-volume-val');
+  if (volumeSlider) {
+    volumeSlider.oninput = () => {
+      const val = Number(volumeSlider.value);
+      settings.volume = Math.max(0, Math.min(1, val / 100));
+      if (volumeVal) volumeVal.textContent = `${val}%`;
+      saveSettings();
+    };
+    volumeSlider.onchange = () => {
+      blip(660, 0.06);
+    };
+  }
+
+  const buzzerToggle = $('set-buzzer');
+  if (buzzerToggle) {
+    buzzerToggle.onchange = () => {
+      settings.buzzer = buzzerToggle.checked;
+      saveSettings();
+    };
+  }
+
+  const fanfareToggle = $('set-fanfare');
+  if (fanfareToggle) {
+    fanfareToggle.onchange = () => {
+      settings.fanfare = fanfareToggle.checked;
+      saveSettings();
+    };
+  }
+
+  const hapticsToggle = $('set-haptics');
+  if (hapticsToggle) {
+    hapticsToggle.onchange = () => {
+      settings.haptics = hapticsToggle.checked;
+      saveSettings();
+      if (settings.haptics) buzz(14);
+    };
+  }
+
+  const tabTally = $('tab-tally');
+  const tabGallery = $('tab-gallery');
+  if (tabTally && tabGallery) {
+    tabTally.onclick = () => {
+      if (activeShareTab === 'tally') return;
+      activeShareTab = 'tally';
+      tabTally.classList.add('is-active');
+      tabGallery.classList.remove('is-active');
+      updateShareCard();
+    };
+    tabGallery.onclick = () => {
+      if (activeShareTab === 'gallery') return;
+      activeShareTab = 'gallery';
+      tabGallery.classList.add('is-active');
+      tabTally.classList.remove('is-active');
+      updateShareCard();
+    };
+  }
+}
 
 /* ================================================================ wiring */
 
 function wireEvents() {
+  wireSettings();
   const hrHostBtn = $('hr-host-btn');
   if (hrHostBtn) {
     hrHostBtn.onclick = () => {
@@ -1684,21 +1866,23 @@ function wireEvents() {
   $('sh-close').onclick = closeShare;
   $('share-modal').onclick = (e) => e.target === $('share-modal') && closeShare();
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && $('share-modal').classList.contains('on')) {
-      closeShare();
+    if (e.key === 'Escape') {
+      if ($('share-modal') && $('share-modal').classList.contains('on')) closeShare();
+      if ($('settings-modal') && $('settings-modal').classList.contains('on')) closeSettings();
     }
   });
 
   $('duo-toggle').onclick = () => {
     blip(500, 0.06);
     if (S.mode === 'solo') {
-      openDuoPad({ colorMode: 'split', title: 'Shared Drawing Pad' });
+      openDuoPad({ colorMode: 'split', title: 'Shared Drawing Pad', secretWord: S.card?.word || '' });
     } else if (S.mode === 'host') {
       openDuoPad({
         colorMode: 'red',
         title: `${S.teams[0].name} Drawing Pad`,
         opponentTitle: `${S.teams[1].name} (Other Team)`,
         opponentColor: S.teams[1].color,
+        secretWord: S.card?.word || '',
       });
     } else {
       openDuoPad({
@@ -1706,6 +1890,7 @@ function wireEvents() {
         title: `${S.teams[1].name} Drawing Pad`,
         opponentTitle: `${S.teams[0].name} (Other Team)`,
         opponentColor: S.teams[0].color,
+        secretWord: S.card?.word || '',
       });
     }
   };

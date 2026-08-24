@@ -381,7 +381,7 @@ await test('guest mode hides host-only controls on the draw screen', async () =>
   assert.ok(!visible(guest, 'got0'), 'guests do not score');
   assert.ok(!visible(guest, 'got1'), 'guests do not score');
   assert.ok(visible(guest, 'guest-done'), 'guests get a round-over button');
-  assert.ok($(guest, 'peek').classList.contains('showing'), 'guest word is pinned by default');
+  assert.ok(!$(guest, 'peek').classList.contains('showing'), 'guest word is hidden by default');
 
   host.window.close();
   guest.window.close();
@@ -566,6 +566,56 @@ await test('guests reaching the round cap see completion state and can step back
 
   host.window.close();
   guest.window.close();
+});
+
+await test('settings modal opens, modifies audio preferences, and persists to storage', async () => {
+  const dom = await boot();
+  click(dom, 'open-settings');
+  assert.ok($(dom, 'settings-modal').classList.contains('on'), 'Settings modal should be visible');
+
+  const volSlider = $(dom, 'set-volume');
+  volSlider.value = '40';
+  volSlider.dispatchEvent(new dom.window.Event('input'));
+
+  const buzzerCheck = $(dom, 'set-buzzer');
+  buzzerCheck.checked = false;
+  buzzerCheck.dispatchEvent(new dom.window.Event('change'));
+
+  assert.equal($(dom, 'set-volume-val').textContent, '40%');
+  const stored = JSON.parse(dom.window.localStorage.getItem('mnm_audio_settings') || '{}');
+  assert.equal(stored.volume, 0.4);
+  assert.equal(stored.buzzer, false);
+
+  click(dom, 'settings-close');
+  assert.ok(!$(dom, 'settings-modal').classList.contains('on'), 'Settings modal should be closed');
+
+  dom.window.close();
+});
+
+await test('share modal switches between score tally and drawing gallery cards', async () => {
+  const dom = await boot();
+  click(dom, 'go');
+  click(dom, 'reveal');
+  click(dom, dom.window.document.querySelector('.theme'));
+  click(dom, dom.window.document.querySelector('.card'));
+  click(dom, 'got0');
+  click(dom, 'wrap-result');
+  click(dom, 'm-yes');
+  await new Promise((r) => setTimeout(r, 50));
+
+  click(dom, 'share');
+  assert.ok($(dom, 'share-modal').classList.contains('on'), 'Share modal should open');
+  assert.ok($(dom, 'tab-tally').classList.contains('is-active'), 'Tally tab should be active by default');
+
+  click(dom, 'tab-gallery');
+  await new Promise((r) => setTimeout(r, 60));
+  assert.ok($(dom, 'tab-gallery').classList.contains('is-active'), 'Gallery tab should be active after clicking');
+  assert.ok(!$(dom, 'tab-tally').classList.contains('is-active'), 'Tally tab should become inactive');
+
+  click(dom, 'sh-close');
+  assert.ok(!$(dom, 'share-modal').classList.contains('on'), 'Share modal should close');
+
+  dom.window.close();
 });
 
 console.log(`\n${'─'.repeat(52)}`);

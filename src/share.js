@@ -59,10 +59,12 @@ function truncate(ctx, text, max) {
  * @returns {HTMLCanvasElement}
  */
 export function renderShareCard(game) {
+  if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
 
   /* ground */
   ctx.fillStyle = INK;
@@ -184,6 +186,158 @@ export function renderShareCard(game) {
   ctx.fillStyle = 'rgba(247,244,236,0.28)';
   ctx.font = body(21);
   ctx.fillText('Marker & Mayhem - one word, both teams, 90 seconds', PAD, H - 58);
+
+  return canvas;
+}
+
+/**
+ * Render a visual gallery card featuring the drawings made during the game.
+ * @param {Object} game
+ * @returns {HTMLCanvasElement}
+ */
+export function renderGalleryCard(game) {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  /* ground */
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= W; x += 44) {
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, H);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= H; y += 44) {
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(W, y + 0.5);
+    ctx.stroke();
+  }
+
+  const [a, b] = game.teams;
+  const tie = a.score === b.score;
+  const champ = a.score >= b.score ? a : b;
+
+  /* masthead */
+  ctx.fillStyle = MUTED;
+  ctx.font = body(24, 700);
+  tracked(ctx, 'MARKER & MAYHEM', PAD, 108, 5.5);
+
+  /* headline */
+  ctx.fillStyle = tie ? PAPER : champ.color;
+  ctx.font = display(88);
+  ctx.fillText('Match Gallery', PAD, 218);
+
+  ctx.fillStyle = 'rgba(247,244,236,0.62)';
+  ctx.font = body(28);
+  const sub = `${a.name} (${a.score}) vs ${b.name} (${b.score}) - ${game.rounds || (game.history && game.history.length) || 0} rounds`;
+  ctx.fillText(sub, PAD, 272);
+
+  hairline(ctx, 310);
+
+  /* Drawings Grid: 2 columns */
+  const items = (game.history || []).slice(0, 4);
+  const colW = (W - PAD * 2 - 32) / 2;
+  const rowH = 430;
+
+  items.forEach((h, idx) => {
+    const col = idx % 2;
+    const row = Math.floor(idx / 2);
+    const x = PAD + col * (colW + 32);
+    const y = 340 + row * (rowH + 24);
+
+    // Card container
+    ctx.fillStyle = '#1B1E3C';
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, colW, rowH, 18);
+    } else {
+      ctx.rect(x, y, colW, rowH);
+    }
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(247,244,236,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Round number
+    ctx.fillStyle = MUTED;
+    ctx.font = body(18, 700);
+    tracked(ctx, `ROUND ${idx + 1}`, x + 20, y + 36, 2.5);
+
+    // Word
+    ctx.fillStyle = PAPER;
+    ctx.font = display(28);
+    ctx.fillText(truncate(ctx, h.w || 'Word', colW - 40), x + 20, y + 74);
+
+    // Outcome tag
+    const winnerName = h.win !== null && h.win !== undefined ? game.teams[h.win]?.name : 'Nobody';
+    const tagColor = h.win !== null && h.win !== undefined ? game.teams[h.win]?.color : MUTED;
+    ctx.fillStyle = tagColor;
+    ctx.font = body(18, 600);
+    ctx.fillText(`${winnerName} (+${h.p || 0})`, x + 20, y + 104);
+
+    // Drawing box
+    const drawBoxX = x + 16;
+    const drawBoxY = y + 120;
+    const drawBoxW = colW - 32;
+    const drawBoxH = rowH - 136;
+
+    ctx.fillStyle = '#12142A';
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(drawBoxX, drawBoxY, drawBoxW, drawBoxH, 12);
+    } else {
+      ctx.rect(drawBoxX, drawBoxY, drawBoxW, drawBoxH);
+    }
+    ctx.fill();
+
+    if (h.strokes && Array.isArray(h.strokes) && h.strokes.length > 0) {
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(drawBoxX, drawBoxY, drawBoxW, drawBoxH, 12);
+      } else {
+        ctx.rect(drawBoxX, drawBoxY, drawBoxW, drawBoxH);
+      }
+      ctx.clip();
+      for (const s of h.strokes) {
+        if (!s || !s.segments) continue;
+        ctx.strokeStyle = s.color || '#FF4262';
+        ctx.lineWidth = Math.max(1.5, (s.width || 4) * (drawBoxW / 400));
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (const seg of s.segments) {
+          const ax = drawBoxX + seg.aNorm.x * drawBoxW;
+          const ay = drawBoxY + seg.aNorm.y * drawBoxH;
+          const bx = drawBoxX + seg.bNorm.x * drawBoxW;
+          const by = drawBoxY + seg.bNorm.y * drawBoxH;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx + 0.01, by + 0.01);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else {
+      ctx.fillStyle = 'rgba(247,244,236,0.2)';
+      ctx.font = body(20);
+      ctx.textAlign = 'center';
+      ctx.fillText('No drawing recorded', drawBoxX + drawBoxW / 2, drawBoxY + drawBoxH / 2 + 6);
+      ctx.textAlign = 'left';
+    }
+  });
+
+  hairline(ctx, H - 90);
+  ctx.fillStyle = 'rgba(247,244,236,0.35)';
+  ctx.font = body(20);
+  ctx.fillText('Marker & Mayhem - Draw fast. Guess faster.', PAD, H - 48);
 
   return canvas;
 }
