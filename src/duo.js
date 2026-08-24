@@ -236,8 +236,9 @@ function flushStrokeBatch() {
   strokeBatch = [];
 }
 
-function queueStroke(aNorm, bNorm, color, width, tool) {
+function queueStroke(aNorm, bNorm, color, width, tool, strokeId) {
   strokeBatch.push({
+    id: strokeId,
     a: { x: Math.round(aNorm.x * 1000) / 1000, y: Math.round(aNorm.y * 1000) / 1000 },
     b: { x: Math.round(bNorm.x * 1000) / 1000, y: Math.round(bNorm.y * 1000) / 1000 },
     c: color,
@@ -252,7 +253,7 @@ function queueStroke(aNorm, bNorm, color, width, tool) {
   }
 }
 
-function padStroke(a, b, color, width, tool = 'pen') {
+function padStroke(a, b, color, width, tool = 'pen', strokeId = '') {
   if (!padCtx) {
     return;
   }
@@ -275,13 +276,16 @@ function padStroke(a, b, color, width, tool = 'pen') {
 
   if (padCanvas) {
     const rect = padCanvas.getBoundingClientRect();
+    if (tool === 'eraser' && padColorMode === 'split') {
+      drawDivider(rect.width, rect.height);
+    }
     if (rect.width > 0 && rect.height > 0) {
       const aNorm = { x: a.x / rect.width, y: a.y / rect.height };
       const bNorm = { x: b.x / rect.width, y: b.y / rect.height };
-      queueStroke(aNorm, bNorm, color, width, tool);
+      queueStroke(aNorm, bNorm, color, width, tool, strokeId);
       if (streamChannel) {
         try {
-          streamChannel.postMessage({ type: 'stroke', from: padColorMode, aNorm, bNorm, color, width, tool });
+          streamChannel.postMessage({ type: 'stroke', from: padColorMode, aNorm, bNorm, color, width, tool, id: strokeId });
         } catch (err) {}
       }
     }
@@ -334,16 +338,28 @@ export function renderIncomingBatch(from, pts = []) {
     const width = item.w || 4;
     sideboardStroke(sa, sb, color, width, tool);
 
-    opponentStrokeHistory.push({
-      tool,
-      color,
-      width,
-      segments: [{ aNorm: item.a, bNorm: item.b }],
-    });
+    const strokeId = item.id;
+    const lastOpponentStroke = opponentStrokeHistory[opponentStrokeHistory.length - 1];
+    if (lastOpponentStroke && strokeId && lastOpponentStroke.id === strokeId) {
+      lastOpponentStroke.segments.push({ aNorm: item.a, bNorm: item.b });
+    } else {
+      opponentStrokeHistory.push({
+        id: strokeId,
+        tool,
+        color,
+        width,
+        segments: [{ aNorm: item.a, bNorm: item.b }],
+      });
+    }
   }
 }
 
 export function undoPad() {
+  if (strokeFlushTimer) {
+    clearTimeout(strokeFlushTimer);
+    strokeFlushTimer = null;
+  }
+  strokeBatch = [];
   if (strokeHistory.length === 0) return;
   strokeHistory.pop();
   redrawPadCanvas();
@@ -366,13 +382,17 @@ export function renderIncomingUndo(from) {
 }
 
 function clearPad() {
-  if (!padCtx || !padCanvas) {
-    return;
+  if (strokeFlushTimer) {
+    clearTimeout(strokeFlushTimer);
+    strokeFlushTimer = null;
   }
+  strokeBatch = [];
   strokeHistory.length = 0;
-  const rect = padCanvas.getBoundingClientRect();
-  padCtx.clearRect(0, 0, rect.width, rect.height);
-  drawDivider(rect.width, rect.height);
+  if (padCtx && padCanvas) {
+    const rect = padCanvas.getBoundingClientRect();
+    padCtx.clearRect(0, 0, rect.width, rect.height);
+    drawDivider(rect.width, rect.height);
+  }
 
   if (typeof sendP2P === 'function') {
     sendP2P('CLEAR', { from: padColorMode });
@@ -397,6 +417,19 @@ export function clearIncomingSideboard(from) {
   sideboardCtx.clearRect(0, 0, rect.width, rect.height);
 }
 
+export function resetDuoPad() {
+  if (strokeFlushTimer) {
+    clearTimeout(strokeFlushTimer);
+    strokeFlushTimer = null;
+  }
+  strokeBatch = [];
+  strokeHistory.length = 0;
+  opponentStrokeHistory.length = 0;
+  padPointers.clear();
+  redrawPadCanvas();
+  redrawSideboardCanvas();
+}
+
 export function openDuoPad({
   colorMode = 'split',
   opponentTitle = '',
@@ -414,6 +447,7 @@ export function closeDuoPad() {
   if (!padShown) {
     return;
   }
+  flushStrokeBatch();
   padShown = false;
   const pad = padEl('duo-pad');
   if (pad) pad.hidden = true;
@@ -443,12 +477,20 @@ export function wireDuoPad() {
           const sa = { x: msg.aNorm.x * rect.width, y: msg.aNorm.y * rect.height };
           const sb = { x: msg.bNorm.x * rect.width, y: msg.bNorm.y * rect.height };
           sideboardStroke(sa, sb, msg.color, msg.width, msg.tool);
-          opponentStrokeHistory.push({
-            tool: msg.tool,
-            color: msg.color,
-            width: msg.width,
-            segments: [{ aNorm: msg.aNorm, bNorm: msg.bNorm }],
-          });
+
+          const strokeId = msg.id;
+          const lastOpponentStroke = opponentStrokeHistory[opponentStrokeHistory.length - 1];
+          if (lastOpponentStroke && strokeId && lastOpponentStroke.id === strokeId) {
+            lastOpponentStroke.segments.push({ aNorm: msg.aNorm, bNorm: msg.bNorm });
+          } else {
+            opponentStrokeHistory.push({
+              id: strokeId,
+              tool: msg.tool,
+              color: msg.color,
+              width: msg.width,
+              segments: [{ aNorm: msg.aNorm, bNorm: msg.bNorm }],
+            });
+          }
         } else if (msg.type === 'undo') {
           renderIncomingUndo(msg.from);
         } else if (msg.type === 'clear') {
@@ -515,21 +557,26 @@ export function wireDuoPad() {
       const color = resolveColor(p.y, rect.height);
       const width = resolveWidth();
       const tool = currentTool;
+      const strokeId = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+
+      const aNorm = rect.width > 0 && rect.height > 0 ? { x: p.x / rect.width, y: p.y / rect.height } : { x: 0, y: 0 };
+      const bNorm = rect.width > 0 && rect.height > 0 ? { x: (p.x + 0.01) / rect.width, y: (p.y + 0.01) / rect.height } : { x: 0, y: 0 };
 
       const currentStroke = {
+        id: strokeId,
         tool,
         color,
         width,
-        segments: [],
+        segments: [{ aNorm, bNorm }],
       };
 
-      padPointers.set(e.pointerId, { ...p, color, width, tool, stroke: currentStroke });
+      padPointers.set(e.pointerId, { ...p, color, width, tool, strokeId, stroke: currentStroke });
       try {
         padCanvas.setPointerCapture(e.pointerId);
       } catch (err) {
         /* capture is a nicety; drawing works without it */
       }
-      padStroke(p, p, color, width, tool);
+      padStroke(p, p, color, width, tool, strokeId);
     });
 
     padCanvas.addEventListener('pointermove', (e) => {
@@ -540,7 +587,7 @@ export function wireDuoPad() {
       e.preventDefault();
       const p = padPos(e);
       const rect = padCanvas.getBoundingClientRect();
-      padStroke(last, p, last.color, last.width, last.tool);
+      padStroke(last, p, last.color, last.width, last.tool, last.strokeId);
 
       if (rect.width > 0 && rect.height > 0) {
         const aNorm = { x: last.x / rect.width, y: last.y / rect.height };

@@ -9,6 +9,7 @@
   --ink-2: #1B1E3C;
   --ink-3: #2B2F5E;
   --paper: #F7F4EC;
+  --chalk: #F7F4EC;
 
   --red: #FF4262;
   --blue: #3D9BFF;
@@ -16,6 +17,7 @@
 
   --display: 'Bricolage Grotesque', system-ui, sans-serif;
   --body: 'Space Grotesk', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }

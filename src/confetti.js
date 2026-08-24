@@ -6,6 +6,7 @@
 let confettiAnimationId = null;
 
 export function burstConfetti(primaryColor = '#FF4262', secondaryColor = '#3D9BFF') {
+  if (typeof document === 'undefined') return;
   const canvas = document.getElementById('confetti-canvas');
   if (!canvas) return;
 
@@ -18,13 +19,12 @@ export function burstConfetti(primaryColor = '#FF4262', secondaryColor = '#3D9BF
   }
 
   const rect = canvas.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = (rect.width || window.innerWidth) * dpr;
-  canvas.height = (rect.height || window.innerHeight) * dpr;
+  const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2);
+  const w = rect.width || (typeof window !== 'undefined' ? window.innerWidth : 360) || 360;
+  const h = rect.height || (typeof window !== 'undefined' ? window.innerHeight : 640) || 640;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const w = rect.width || window.innerWidth;
-  const h = rect.height || window.innerHeight;
 
   const colors = [
     primaryColor,
@@ -105,13 +105,19 @@ export function burstConfetti(primaryColor = '#FF4262', secondaryColor = '#3D9BF
 }
 
 export function stopConfetti() {
-  if (confettiAnimationId) {
+  if (confettiAnimationId && typeof cancelAnimationFrame === 'function') {
     cancelAnimationFrame(confettiAnimationId);
     confettiAnimationId = null;
   }
+  if (typeof document === 'undefined') return;
   const canvas = document.getElementById('confetti-canvas');
   if (canvas) {
     const ctx = canvas.getContext('2d');
-    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (ctx) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
   }
 }

@@ -36,6 +36,7 @@ import {
   wireDuoPad,
   openDuoPad,
   closeDuoPad,
+  resetDuoPad,
   renderIncomingStroke,
   renderIncomingBatch,
   renderIncomingUndo,
@@ -790,6 +791,7 @@ function showInvite() {
 function toHandoff() {
   hostReadyState = false;
   guestReadyState = false;
+  if (typeof resetDuoPad === 'function') resetDuoPad();
 
   S.picker = (S.round - 1) % 2;
   const t = S.teams[S.picker];
@@ -1283,6 +1285,7 @@ async function wrapUp() {
 /* ============================================================= guest mode */
 
 function toGuestReady() {
+  if (typeof resetDuoPad === 'function') resetDuoPad();
   const overCap = Boolean(S.rounds && S.round > S.rounds);
   const head = $('guest-head');
   const sub = $('guest-sub');
@@ -1613,11 +1616,7 @@ function wireEvents() {
       if (typeof sendP2P === 'function') {
         sendP2P('DRAWER_READY', { role: 'host', ready: true, round: S.round });
       }
-      if (hostReadyState && guestReadyState) {
-        startHostSyncedRound();
-      } else {
-        startHostSyncedRound();
-      }
+      startHostSyncedRound();
       return;
     }
     dealThemes();

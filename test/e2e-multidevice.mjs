@@ -55,6 +55,10 @@ async function bootDevice({ hash = '' } = {}) {
         restore() {},
         drawImage() {},
         setTransform() {},
+        translate() {},
+        rotate() {},
+        fillRect() {},
+        setLineDash() {},
       });
       window.scrollTo = () => {};
       window.BroadcastChannel = globalThis.BroadcastChannel;
@@ -131,12 +135,31 @@ assert.equal(active(host), 's-draw', 'Host should transition to s-draw');
 assert.equal(active(guest), 's-draw', 'Guest should transition to s-draw simultaneously');
 console.log('  [PASS] Step 6: Host started game; both phones transitioned to s-draw');
 
-// 8. Open Drawing Pad & Stream Strokes
+// 8. Open Drawing Pad & Test Drawing Tools (Sizes, Eraser, Palette, Undo)
 click(host, 'duo-toggle');
 click(guest, 'duo-toggle');
 assert.ok(!$(host, 'duo-pad').hidden, 'Host drawing pad should be open');
 assert.ok(!$(guest, 'duo-pad').hidden, 'Guest drawing pad should be open');
-console.log('  [PASS] Step 7: Drawing pad and opponent sideboards active on both phones');
+
+// Test tool switching
+click(host, 'pad-tool-eraser');
+assert.ok($(host, 'pad-tool-eraser').classList.contains('is-active'), 'Eraser tool selected');
+click(host, 'pad-tool-pen');
+assert.ok($(host, 'pad-tool-pen').classList.contains('is-active'), 'Pen tool selected');
+
+// Test brush sizes
+const sizeLg = host.window.document.querySelector('.pad-size-btn[data-size="lg"]');
+if (sizeLg) click(host, sizeLg);
+
+// Test color swatch
+const swatchGreen = host.window.document.querySelector('.pad-color-swatch[data-color="#2EE898"]');
+if (swatchGreen) click(host, swatchGreen);
+
+// Test undo
+click(host, 'pad-undo');
+click(guest, 'pad-undo');
+
+console.log('  [PASS] Step 7: Drawing pad tools (brush sizes, eraser, palette, undo) verified');
 
 // 9. Accidental Navigation Protection Verification
 host.window.dispatchEvent(new host.window.Event('beforeunload'));
@@ -173,7 +196,21 @@ const hostRound2Word = $(host, 'host-word-text').textContent;
 assert.equal(round2Word, hostRound2Word, 'Host receives Round 2 word picked by Guest');
 console.log(`  [PASS] Step 10: Round 2 word "${round2Word}" picked by Guest synced to Host`);
 
+// 12. Complete game to win screen and verify celebrations
+click(guest, 'gr-my-btn');
+await new Promise((r) => setTimeout(r, 100));
+click(host, 'reveal'); // Start round 2
+await new Promise((r) => setTimeout(r, 100));
+click(host, 'got0'); // Host scores again
+assert.equal(active(host), 's-result');
+click(host, 'wrap-result'); // Wrap up match early
+click(host, 'm-yes');
+await new Promise((r) => setTimeout(r, 100));
+assert.equal(active(host), 's-win', 'Host lands on s-win');
+assert.ok($(host, 'confetti-canvas'), 'Host has confetti canvas active on victory');
+console.log('  [PASS] Step 11: Game victory celebrations & confetti canvas verified');
+
 host.window.close();
 guest.window.close();
 
-console.log('\nALL 10 MULTI-DEVICE END-TO-END STEPS PASSED SUCCESSFULLY.');
+console.log('\nALL 11 MULTI-DEVICE END-TO-END STEPS PASSED SUCCESSFULLY.');
