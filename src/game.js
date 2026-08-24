@@ -53,6 +53,7 @@ import {
   getCurrentStrokes,
   renderIncomingStroke,
   renderIncomingBatch,
+  renderIncomingStrokeEnd,
   renderIncomingUndo,
   clearIncomingSideboard,
 } from './duo.js';
@@ -816,6 +817,12 @@ function handleP2PMessage(msg) {
     case 'STROKES':
       if (msg.pts && Array.isArray(msg.pts)) {
         renderIncomingBatch(msg.from, msg.pts);
+      }
+      break;
+
+    case 'STROKE_END':
+      if (msg.stroke) {
+        renderIncomingStrokeEnd(msg.from, msg.stroke);
       }
       break;
 

@@ -467,6 +467,17 @@ export function renderIncomingBatch(from, pts = []) {
   }
 }
 
+export function renderIncomingStrokeEnd(from, stroke) {
+  if (from === padColorMode || !stroke || !stroke.id) return;
+  const existingIdx = opponentStrokeHistory.findIndex((s) => s.id === stroke.id);
+  if (existingIdx >= 0) {
+    opponentStrokeHistory[existingIdx] = stroke;
+  } else {
+    opponentStrokeHistory.push(stroke);
+  }
+  redrawSideboardCanvas();
+}
+
 /** Undo last stroke for Red in solo split mode */
 export function undoRed() {
   for (let i = strokeHistory.length - 1; i >= 0; i--) {
@@ -843,26 +854,33 @@ export function wireDuoPad() {
         return;
       }
       e.preventDefault();
-      const p = padPos(e);
+      const subEvents = (typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null) || [e];
       const rect = padCanvas.getBoundingClientRect();
-      padStroke(last, p, last.color, last.width, last.tool, last.strokeId);
 
-      if (rect.width > 0 && rect.height > 0) {
-        const aNorm = { x: last.x / rect.width, y: last.y / rect.height };
-        const bNorm = { x: p.x / rect.width, y: p.y / rect.height };
-        if (last.stroke) {
-          last.stroke.segments.push({ aNorm, bNorm });
+      for (const ev of subEvents) {
+        const p = padPos(ev);
+        padStroke(last, p, last.color, last.width, last.tool, last.strokeId);
+
+        if (rect.width > 0 && rect.height > 0) {
+          const aNorm = { x: last.x / rect.width, y: last.y / rect.height };
+          const bNorm = { x: p.x / rect.width, y: p.y / rect.height };
+          if (last.stroke) {
+            last.stroke.segments.push({ aNorm, bNorm });
+          }
         }
-      }
 
-      last.x = p.x;
-      last.y = p.y;
+        last.x = p.x;
+        last.y = p.y;
+      }
     });
 
     const endPointer = (e) => {
       const last = padPointers.get(e.pointerId);
       if (last && last.stroke && last.stroke.segments.length > 0) {
         strokeHistory.push(last.stroke);
+        if (padColorMode !== 'split' && typeof sendP2P === 'function') {
+          sendP2P('STROKE_END', { from: padColorMode, stroke: last.stroke });
+        }
       }
       padPointers.delete(e.pointerId);
       flushStrokeBatch();

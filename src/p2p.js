@@ -147,7 +147,7 @@ export function sendP2P(type, payload = {}) {
       /* network error ignored */
     }
   } else if (p2pRoomTopic) {
-    if (p2pSendQueue.length < 50) {
+    if (p2pSendQueue.length < 500) {
       p2pSendQueue.push(json);
     }
   }
