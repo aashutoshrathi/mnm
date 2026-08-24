@@ -482,11 +482,24 @@ test('duo drawing module exports expected interfaces', async () => {
   assert.equal(typeof duo.closeDuoPad, 'function');
   assert.equal(typeof duo.resetDuoPad, 'function');
   assert.equal(typeof duo.undoPad, 'function');
+  assert.equal(typeof duo.getPadSnapshot, 'function');
+  assert.equal(typeof duo.getCurrentStrokes, 'function');
   assert.equal(typeof duo.renderIncomingBatch, 'function');
   assert.equal(typeof duo.renderIncomingUndo, 'function');
   assert.equal(typeof duo.clearIncomingSideboard, 'function');
   assert.equal(typeof duo.duoPadIsOpen, 'function');
   assert.equal(duo.duoPadIsOpen(), false);
+});
+
+/* ==================================================== share cards & gallery */
+
+group('share cards and drawing gallery');
+
+test('share module exports renderShareCard and renderGalleryCard', async () => {
+  const share = await import('../src/share.js');
+  assert.equal(typeof share.renderShareCard, 'function');
+  assert.equal(typeof share.renderGalleryCard, 'function');
+  assert.equal(typeof share.exportCard, 'function');
 });
 
 /* ================================================================ report */

@@ -430,6 +430,19 @@ export function resetDuoPad() {
   redrawSideboardCanvas();
 }
 
+export function getPadSnapshot() {
+  if (!padCanvas || strokeHistory.length === 0) return null;
+  try {
+    return padCanvas.toDataURL('image/png');
+  } catch (err) {
+    return null;
+  }
+}
+
+export function getCurrentStrokes() {
+  return JSON.parse(JSON.stringify(strokeHistory));
+}
+
 export function openDuoPad({
   colorMode = 'split',
   opponentTitle = '',

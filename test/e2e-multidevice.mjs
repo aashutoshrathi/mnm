@@ -210,7 +210,29 @@ assert.equal(active(host), 's-win', 'Host lands on s-win');
 assert.ok($(host, 'confetti-canvas'), 'Host has confetti canvas active on victory');
 console.log('  [PASS] Step 11: Game victory celebrations & confetti canvas verified');
 
+// 13. Drawing Gallery card & Settings modal verification
+click(host, 'share');
+assert.ok($(host, 'share-modal').classList.contains('on'), 'Share modal should open');
+assert.ok($(host, 'tab-tally').classList.contains('is-active'), 'Tally tab active by default');
+click(host, 'tab-gallery');
+await new Promise((r) => setTimeout(r, 100));
+assert.ok($(host, 'tab-gallery').classList.contains('is-active'), 'Gallery tab becomes active');
+click(host, 'sh-close');
+assert.ok(!$(host, 'share-modal').classList.contains('on'), 'Share modal closed');
+
+click(host, 'reset'); // Go back to setup screen
+assert.equal(active(host), 's-setup');
+click(host, 'open-settings');
+assert.ok($(host, 'settings-modal').classList.contains('on'), 'Settings modal opens');
+const hostVol = $(host, 'set-volume');
+hostVol.value = '60';
+hostVol.dispatchEvent(new host.window.Event('input'));
+assert.equal($(host, 'set-volume-val').textContent, '60%');
+click(host, 'settings-close');
+assert.ok(!$(host, 'settings-modal').classList.contains('on'), 'Settings modal closes');
+console.log('  [PASS] Step 12: Drawing gallery export card and settings modal verified');
+
 host.window.close();
 guest.window.close();
 
-console.log('\nALL 11 MULTI-DEVICE END-TO-END STEPS PASSED SUCCESSFULLY.');
+console.log('\nALL 12 MULTI-DEVICE END-TO-END STEPS PASSED SUCCESSFULLY.');

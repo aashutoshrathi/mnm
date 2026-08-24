@@ -29,8 +29,15 @@
   <!-- ==================== SETUP ==================== -->
   <section class="screen is-active" id="s-setup">
     <header style="padding:14px 0 24px">
-      <p class="eyebrow">Pictionary, refereed</p>
-      <h1 style="margin-top:8px">Marker&nbsp;&amp;<br>Mayhem</h1>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+        <div>
+          <p class="eyebrow">Pictionary, refereed</p>
+          <h1 style="margin-top:8px">Marker&nbsp;&amp;<br>Mayhem</h1>
+        </div>
+        <button type="button" class="iconbtn" id="open-settings" aria-label="Audio and haptics settings" title="Audio and haptics settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
       <div class="lbl" style="margin-top:12px;align-items:flex-start">
         <p class="sub" style="flex:1">One word, both teams drawing it at once. I hold the word, run the clock, and keep the tally.</p>
         <button class="info" aria-expanded="false" aria-label="How a round works">i</button>
@@ -497,12 +504,83 @@
 
 <div class="modal" id="share-modal" role="dialog" aria-modal="true" aria-labelledby="sh-title">
   <div class="sheet">
-    <h3 id="sh-title">Final tally</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <h3 id="sh-title" style="margin:0">Share card</h3>
+      <div class="seg seg--sm" id="share-tabs" style="margin:0;width:auto">
+        <button type="button" class="is-active" id="tab-tally" data-tab="tally">Tally</button>
+        <button type="button" id="tab-gallery" data-tab="gallery">Gallery</button>
+      </div>
+    </div>
     <div class="shot" id="shot"></div>
     <p class="sub footnote" id="sh-hint">Long-press the image to save it.</p>
     <div class="stack" style="margin-top:14px">
       <button class="btn btn--yellow" id="sh-share" data-haptic="20">Share or save</button>
       <button class="btn btn--ghost btn--sm" id="sh-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="set-title">
+  <div class="sheet">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px">
+      <h3 id="set-title" style="margin:0">Audio & Haptics</h3>
+      <button type="button" class="linkbtn" id="settings-close" aria-label="Close settings">Done</button>
+    </div>
+
+    <div class="settings-list">
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Sound effects</div>
+          <div class="settings-desc">Game audio, timer ticks, and chimes</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="set-sound" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row" id="volume-row">
+        <div style="width:100%">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span class="settings-label">Master volume</span>
+            <span class="settings-val" id="set-volume-val">75%</span>
+          </div>
+          <input type="range" id="set-volume" min="0" max="100" value="75" class="range-slider" aria-label="Master volume">
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Timer buzzer</div>
+          <div class="settings-desc">Arcade alert when clock hits 0s</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="set-buzzer" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Victory fanfare</div>
+          <div class="settings-desc">Major arpeggio chord on match victory</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="set-fanfare" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row" id="haptics-row">
+        <div>
+          <div class="settings-label">Haptic vibration</div>
+          <div class="settings-desc">Vibration response on buttons and alerts</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="set-haptics" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
   </div>
 </div>
