@@ -710,6 +710,12 @@ function handleP2PMessage(msg) {
         stopClock();
         if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
         if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        if (Array.isArray(msg.history)) {
+          S.history = msg.history;
+        } else if (S.card) {
+          const strokes = typeof getCurrentStrokes === 'function' ? getCurrentStrokes() : [];
+          S.history.push({ r: msg.round, w: S.card.word, t: S.theme?.name || '', win: msg.winner, p: msg.pts, strokes });
+        }
         if (msg.winner === null) {
           $('res-eyebrow').textContent = `Round ${msg.round}`;
           $('verdict').textContent = 'Nobody got it';
