@@ -808,7 +808,8 @@ function toHandoff() {
       } else {
         $('handoff-head').textContent = `${S.teams[1].name} is choosing…`;
         $('handoff-sub').textContent = `Waiting for ${S.teams[1].name} to choose the theme and word.`;
-        $('reveal').hidden = true;
+        $('reveal').textContent = 'Pick on this phone instead';
+        $('reveal').hidden = false;
       }
     } else {
       if (hostWordBox) {
@@ -1344,7 +1345,12 @@ function toGuestReady() {
       if (sub) sub.textContent = `Waiting for ${S.teams[0].name} to choose the theme and word.`;
       $('guest-theme').textContent = '⏳ Waiting for pick';
       $('guest-worth').textContent = '...';
-      if (guestActionStack) guestActionStack.hidden = true;
+      if (guestActionStack) guestActionStack.hidden = false;
+      startBtn.textContent = 'Pick on this phone instead';
+      startBtn.onclick = () => {
+        dealThemes();
+        show('s-theme');
+      };
     }
   } else {
     if (guestWordBox) {
@@ -1880,9 +1886,28 @@ function wireEvents() {
     if (document.hidden) {
       stopScanner();
       releaseWakeLock();
-    } else if ($('s-draw').classList.contains('is-active') && S.ticker) {
-      paintClock();
-      requestWakeLock();
+    } else {
+      if ($('s-draw').classList.contains('is-active') && S.ticker) {
+        paintClock();
+        requestWakeLock();
+      }
+      if (typeof sendP2P === 'function') {
+        if (isGuest()) {
+          sendP2P('SYNC_REQUEST', { round: S.round });
+        } else if (isHost()) {
+          sendP2P('ROOM_STATE', {
+            round: S.round,
+            picker: S.picker,
+            theme: S.theme,
+            card: S.card,
+            hostReady: hostReadyState,
+            team0Name: S.teams[0].name,
+            team1Name: S.teams[1].name,
+            team0Score: S.teams[0].score,
+            team1Score: S.teams[1].score,
+          });
+        }
+      }
     }
   });
 
