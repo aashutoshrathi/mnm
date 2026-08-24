@@ -564,6 +564,7 @@ function triggerSynchronizedCountdown(onComplete) {
 
   clearInterval(countdownTimer);
   countdownTimer = setInterval(() => {
+    if (!countdownTimer) return;
     count--;
     if (count > 0) {
       num.textContent = count;
@@ -575,7 +576,9 @@ function triggerSynchronizedCountdown(onComplete) {
       clearInterval(countdownTimer);
       countdownTimer = null;
       overlay.hidden = true;
-      onComplete();
+      if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
+        onComplete();
+      }
     }
   }, 1000);
 }
