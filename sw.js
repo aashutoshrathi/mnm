@@ -1,9 +1,9 @@
 /**
  * sw.js - offline shell with automated cache busting.
- * Cache Version: marker-mayhem-v-dce62f5a12
+ * Cache Version: marker-mayhem-v-3a10003a60
  */
 
-const CACHE = 'marker-mayhem-v-dce62f5a12';
+const CACHE = 'marker-mayhem-v-3a10003a60';
 
 const SHELL = [
   './',
