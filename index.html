@@ -410,6 +410,8 @@
   </section>
 </div>
 
+<canvas class="confetti-canvas" id="confetti-canvas" role="presentation" aria-hidden="true"></canvas>
+
 <!-- ==================== OVERLAYS ==================== -->
 <div class="veil" id="veil">
   <p class="eyebrow">Screen hidden</p>
@@ -420,15 +422,46 @@
 <!-- ==================== DRAWING PAD ==================== -->
 <div class="padwrap" id="duo-pad" hidden>
   <div class="padbar">
-    <span class="padclock" id="pad-clock">1:30</span>
-    <span class="padtitle" id="pad-title">Drawing Pad</span>
+    <span class="padclock" id="pad-clock" aria-label="Remaining time">1:30</span>
+
+    <div class="pad-control-group" id="pad-tools" role="toolbar" aria-label="Drawing tools">
+      <button type="button" class="pad-icon-btn is-active" id="pad-tool-pen" title="Pen" aria-label="Pen tool">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      </button>
+      <button type="button" class="pad-icon-btn" id="pad-tool-eraser" title="Eraser" aria-label="Eraser tool">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+      </button>
+    </div>
+
+    <div class="pad-control-group" id="pad-sizes" role="toolbar" aria-label="Brush sizes">
+      <button type="button" class="pad-size-btn" data-size="sm" title="Thin line" aria-label="Thin line">
+        <span class="dot dot--sm" aria-hidden="true"></span>
+      </button>
+      <button type="button" class="pad-size-btn is-active" data-size="md" title="Medium line" aria-label="Medium line">
+        <span class="dot dot--md" aria-hidden="true"></span>
+      </button>
+      <button type="button" class="pad-size-btn" data-size="lg" title="Thick line" aria-label="Thick line">
+        <span class="dot dot--lg" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <div class="pad-colors" id="pad-colors" role="toolbar" aria-label="Color palette">
+      <button type="button" class="pad-color-swatch is-active" data-color="team" id="swatch-team" title="Team color" aria-label="Team color"></button>
+      <button type="button" class="pad-color-swatch" data-color="#FFFFFF" style="background:#FFFFFF" title="White" aria-label="White color"></button>
+      <button type="button" class="pad-color-swatch" data-color="#FFE14D" style="background:#FFE14D" title="Yellow" aria-label="Yellow color"></button>
+      <button type="button" class="pad-color-swatch" data-color="#2EE898" style="background:#2EE898" title="Green" aria-label="Green color"></button>
+    </div>
+
     <span class="padtools">
-      <button class="linkbtn" id="pad-clear">Clear</button>
-      <button class="linkbtn" id="pad-done">Done</button>
+      <button type="button" class="pad-action-btn" id="pad-undo" title="Undo stroke" aria-label="Undo last stroke">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+      </button>
+      <button type="button" class="linkbtn pad-clear-btn" id="pad-clear" aria-label="Clear drawing pad">Clear</button>
+      <button type="button" class="btn btn--yellow btn--sm pad-done-btn" id="pad-done" aria-label="Close drawing pad">Done</button>
     </span>
   </div>
   <div class="padstage" id="pad-stage">
-    <canvas id="pad-canvas"></canvas>
+    <canvas id="pad-canvas" role="img" aria-label="Drawing canvas"></canvas>
     <span class="zlabel zlabel--top" id="zlabel-top">Red draws up here</span>
     <span class="zlabel zlabel--bottom" id="zlabel-bottom">Blue draws down here</span>
 
@@ -438,7 +471,7 @@
         <span class="sideboard-title" id="sideboard-title">Opponent Board</span>
       </div>
       <div class="sideboard-body">
-        <canvas id="sideboard-canvas" class="sideboard-canvas"></canvas>
+        <canvas id="sideboard-canvas" class="sideboard-canvas" role="img" aria-label="Opponent drawing preview"></canvas>
       </div>
     </div>
   </div>

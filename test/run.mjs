@@ -445,6 +445,50 @@ test('SVG output is well-formed and sized correctly', () => {
   assert.equal((svg.match(/<path/g) || []).length, 1);
 });
 
+/* ==================================================== feedback & audio */
+
+group('feedback and audio');
+
+test('audio and buzzer functions execute safely without AudioContext', async () => {
+  const { buzzer, victoryFanfare, blip, tock, buzz, settings } = await import('../src/feedback.js');
+  assert.doesNotThrow(() => buzzer());
+  assert.doesNotThrow(() => victoryFanfare());
+  assert.doesNotThrow(() => blip(440));
+  assert.doesNotThrow(() => tock(1200, 0.1));
+  assert.doesNotThrow(() => buzz(50));
+  assert.equal(typeof settings.sound, 'boolean');
+  assert.equal(typeof settings.haptics, 'boolean');
+});
+
+/* ==================================================== confetti particles */
+
+group('confetti celebrations');
+
+test('confetti burst and stop execute safely with canvas context', async () => {
+  const { burstConfetti, stopConfetti } = await import('../src/confetti.js');
+  // Safe execution in environment without DOM
+  assert.doesNotThrow(() => burstConfetti());
+  assert.doesNotThrow(() => stopConfetti());
+});
+
+/* ==================================================== duo drawing tools */
+
+group('duo drawing tools and sync');
+
+test('duo drawing module exports expected interfaces', async () => {
+  const duo = await import('../src/duo.js');
+  assert.equal(typeof duo.wireDuoPad, 'function');
+  assert.equal(typeof duo.openDuoPad, 'function');
+  assert.equal(typeof duo.closeDuoPad, 'function');
+  assert.equal(typeof duo.resetDuoPad, 'function');
+  assert.equal(typeof duo.undoPad, 'function');
+  assert.equal(typeof duo.renderIncomingBatch, 'function');
+  assert.equal(typeof duo.renderIncomingUndo, 'function');
+  assert.equal(typeof duo.clearIncomingSideboard, 'function');
+  assert.equal(typeof duo.duoPadIsOpen, 'function');
+  assert.equal(duo.duoPadIsOpen(), false);
+});
+
 /* ================================================================ report */
 
 console.log(`\n${'─'.repeat(52)}`);

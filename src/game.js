@@ -18,7 +18,7 @@ import { ALL_THEMES, THEMES, mashupWord, poolSize, TIER_LADDER } from './words.j
 import { pick, shuffle } from './rng.js';
 import { createStore, ADAPTERS } from './storage.js';
 import { webAdapter, sessionAdapter } from './storage-web.js';
-import { blip, tock, buzz, settings, wireButtonHaptics, hapticsSupported } from './feedback.js';
+import { blip, tock, buzz, buzzer, victoryFanfare, settings, wireButtonHaptics, hapticsSupported } from './feedback.js';
 import { tallySVG } from './tally.js';
 import { renderShareCard, exportCard, fontsReady } from './share.js';
 import { roundFor, syncCode, resetReplay } from './sync.js';
@@ -36,10 +36,13 @@ import {
   wireDuoPad,
   openDuoPad,
   closeDuoPad,
+  resetDuoPad,
   renderIncomingStroke,
   renderIncomingBatch,
+  renderIncomingUndo,
   clearIncomingSideboard,
 } from './duo.js';
+import { burstConfetti, stopConfetti } from './confetti.js';
 import { connectP2P, disconnectP2P, sendP2P } from './p2p.js';
 
 /* ============================================================== constants */
@@ -122,6 +125,9 @@ function isGameActive() {
 }
 
 function show(id) {
+  if (id !== 's-win' && typeof stopConfetti === 'function') {
+    stopConfetti();
+  }
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('is-active'));
   $(id).classList.add('is-active');
   window.scrollTo(0, 0);
@@ -682,6 +688,10 @@ function handleP2PMessage(msg) {
       clearIncomingSideboard(msg.from);
       break;
 
+    case 'UNDO':
+      renderIncomingUndo(msg.from);
+      break;
+
     case 'SCORE':
       if (isGuest()) {
         stopClock();
@@ -781,6 +791,7 @@ function showInvite() {
 function toHandoff() {
   hostReadyState = false;
   guestReadyState = false;
+  if (typeof resetDuoPad === 'function') resetDuoPad();
 
   S.picker = (S.round - 1) % 2;
   const t = S.teams[S.picker];
@@ -1063,8 +1074,7 @@ function runClock() {
 
     if (left <= 0) {
       stopClock();
-      buzz([90, 60, 90]);
-      blip(200, 0.5, 0.07);
+      buzzer();
       if (isGuest()) endGuestRound();
       else finishRound(null);
     }
@@ -1206,7 +1216,8 @@ function endGame(champ, reason) {
   renderBoard($('board3'));
   renderLog();
   show('s-win');
-  [0, 120, 240].forEach((d, i) => setTimeout(() => blip(660 + i * 220, 0.14, 0.06), d));
+  victoryFanfare();
+  burstConfetti(champ.color || '#FF4262', other ? other.color : '#3D9BFF');
 
   if (isHost() && typeof sendP2P === 'function') {
     sendP2P('END_GAME', {
@@ -1274,6 +1285,7 @@ async function wrapUp() {
 /* ============================================================= guest mode */
 
 function toGuestReady() {
+  if (typeof resetDuoPad === 'function') resetDuoPad();
   const overCap = Boolean(S.rounds && S.round > S.rounds);
   const head = $('guest-head');
   const sub = $('guest-sub');
@@ -1604,11 +1616,7 @@ function wireEvents() {
       if (typeof sendP2P === 'function') {
         sendP2P('DRAWER_READY', { role: 'host', ready: true, round: S.round });
       }
-      if (hostReadyState && guestReadyState) {
-        startHostSyncedRound();
-      } else {
-        startHostSyncedRound();
-      }
+      startHostSyncedRound();
       return;
     }
     dealThemes();

@@ -33,6 +33,7 @@ const MODULES = [
   'words.js',
   'sync.js',
   'share.js',
+  'confetti.js',
   'game.js',
 ];
 
