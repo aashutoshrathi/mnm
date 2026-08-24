@@ -169,12 +169,10 @@ export function joinUrl(code, location = window.location) {
   return `${base}#join=${code}`;
 }
 
-/**
- * Pull a join code out of a URL fragment, if present.
- * @param {string} hash e.g. "#join=K7M3QP2X"
- * @returns {string|null}
- */
 export function codeFromHash(hash) {
-  const match = /[#&]join=([0-9A-Za-z\-_]+)/.exec(hash || '');
-  return match ? match[1] : null;
+  const clean = (hash || '').trim();
+  const match = /[#&]join=([0-9A-Za-z\-_]+)/.exec(clean);
+  if (match) return match[1];
+  const directMatch = /^#([0-9A-Za-z\-_]{8})$/.exec(clean);
+  return directMatch ? directMatch[1] : null;
 }

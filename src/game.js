@@ -511,9 +511,34 @@ function handleP2PMessage(msg) {
           lgStatus.textContent = '✓ Joined';
           lgStatus.className = 'lobby-status ready';
         }
-        toast(`${teamName} connected to the room!`);
-        blip(880, 0.1);
         sendP2P('HOST_ACK', { name: S.teams[0].name });
+        sendP2P('ROOM_STATE', {
+          round: S.round,
+          picker: S.picker,
+          theme: S.theme,
+          card: S.card,
+          hostReady: hostReadyState,
+          team0Name: S.teams[0].name,
+          team1Name: S.teams[1].name,
+          team0Score: S.teams[0].score,
+          team1Score: S.teams[1].score,
+        });
+      }
+      break;
+
+    case 'SYNC_REQUEST':
+      if (isHost()) {
+        sendP2P('ROOM_STATE', {
+          round: S.round,
+          picker: S.picker,
+          theme: S.theme,
+          card: S.card,
+          hostReady: hostReadyState,
+          team0Name: S.teams[0].name,
+          team1Name: S.teams[1].name,
+          team0Score: S.teams[0].score,
+          team1Score: S.teams[1].score,
+        });
       }
       break;
 
@@ -522,6 +547,35 @@ function handleP2PMessage(msg) {
         S.teams[0].name = msg.name;
         const oName = $('gr-other-name');
         if (oName) oName.textContent = msg.name;
+      }
+      break;
+
+    case 'ROOM_STATE':
+      if (isGuest()) {
+        if (msg.round) S.round = msg.round;
+        if (msg.picker !== undefined) S.picker = msg.picker;
+        if (msg.theme) S.theme = msg.theme;
+        if (msg.card) S.card = msg.card;
+        if (msg.team0Name) S.teams[0].name = msg.team0Name;
+        if (msg.team1Name) S.teams[1].name = msg.team1Name;
+        if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
+        if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
+        hostReadyState = Boolean(msg.hostReady);
+
+        const oName = $('gr-other-name');
+        if (oName) oName.textContent = S.teams[0].name;
+        const oStatus = $('gr-other-status');
+        if (oStatus) {
+          oStatus.textContent = hostReadyState ? '✓ Ready' : 'Waiting for drawer…';
+          oStatus.className = hostReadyState ? 'ready-status ready' : 'ready-status waiting';
+        }
+
+        const isDrawing = $('s-draw').classList.contains('is-active');
+        const isTheme = $('s-theme').classList.contains('is-active');
+        const isPick = $('s-pick').classList.contains('is-active');
+        if (!isDrawing && !isTheme && !isPick) {
+          toGuestReady();
+        }
       }
       break;
 
@@ -1271,7 +1325,7 @@ function toGuestReady() {
       if (sub) sub.textContent = 'Waiting for the host to choose the theme and word.';
       $('guest-theme').textContent = '⏳ Waiting for pick';
       $('guest-worth').textContent = '...';
-      startBtn.textContent = 'Pick on this phone instead';
+      startBtn.textContent = 'Auto-deal word & start';
       if (grBox) grBox.hidden = true;
     } else {
       if (head) head.textContent = "You're a drawer";
@@ -1389,6 +1443,7 @@ async function enterGuestMode(code, payload, round, playSound = true) {
   if (typeof connectP2P === 'function') {
     connectP2P({ code: S.code, role: 'guest', onMessage: handleP2PMessage });
     sendP2P('PEER_JOINED', { name: S.teams[1].name });
+    sendP2P('SYNC_REQUEST', { round: S.round });
   }
   toGuestReady();
   toast(`Joined ${formatJoinCode(code)}. Review and edit your team name below if you want to.`);
@@ -1503,8 +1558,16 @@ function wireEvents() {
   $('reveal').onclick = () => {
     if (isSynced()) {
       if (!S.card) {
-        dealThemes();
-        show('s-theme');
+        if (S.picker === 0) {
+          dealThemes();
+          show('s-theme');
+        } else {
+          const r = roundFor(S.seed, S.diff, S.round);
+          S.theme = r.theme;
+          S.card = { tier: r.tier, pts: r.pts, word: r.word };
+          sendP2P('WORD_SELECTED', { round: S.round, picker: S.picker, theme: S.theme, card: S.card });
+          toHandoff();
+        }
         return;
       }
       hostReadyState = true;
@@ -1650,8 +1713,16 @@ function wireEvents() {
 
   $('guest-start').onclick = () => {
     if (!S.card) {
-      dealThemes();
-      show('s-theme');
+      if (S.picker === 1) {
+        dealThemes();
+        show('s-theme');
+      } else {
+        const r = roundFor(S.seed, S.diff, S.round);
+        S.theme = r.theme;
+        S.card = { tier: r.tier, pts: r.pts, word: r.word };
+        sendP2P('WORD_SELECTED', { round: S.round, picker: S.picker, theme: S.theme, card: S.card });
+        toGuestReady();
+      }
       return;
     }
     guestReadyState = true;
