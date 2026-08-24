@@ -580,6 +580,9 @@ function triggerSynchronizedCountdown(onComplete) {
 }
 
 function startHostSyncedRound() {
+  if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
+    return;
+  }
   if (!S.card) {
     const r = roundFor(S.seed, S.diff, S.round);
     S.theme = r.theme;

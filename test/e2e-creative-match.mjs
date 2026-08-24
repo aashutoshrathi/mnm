@@ -349,8 +349,6 @@ await new Promise((r) => setTimeout(r, 80));
 
 click(guest, 'gr-my-btn');
 click(host, 'hr-host-btn');
-await new Promise((r) => setTimeout(r, 80));
-click(host, 'reveal');
 await new Promise((r) => setTimeout(r, 100));
 
 // Complete round 3
