@@ -48,13 +48,19 @@ function decodeVarInt(buf, offset = 1) {
   let byteCount = 0;
   let digit = 0;
   do {
-    if (offset + byteCount >= buf.length) break;
+    if (offset + byteCount >= buf.length) {
+      return { value: 0, length: 0, valid: false };
+    }
     digit = buf[offset + byteCount];
     value += (digit & 127) * multiplier;
     multiplier *= 128;
     byteCount++;
   } while ((digit & 128) !== 0 && byteCount < 4);
-  return { value, length: byteCount };
+
+  if ((digit & 128) !== 0) {
+    return { value: 0, length: 0, valid: false };
+  }
+  return { value, length: byteCount, valid: true };
 }
 
 function encodeConnect(id) {
@@ -180,9 +186,11 @@ function setupWebSocket(clientId) {
       const buf = new Uint8Array(e.data);
       let pos = 0;
       while (pos < buf.length) {
+        if (pos + 1 >= buf.length) break;
         const header = buf[pos];
         const type = header >> 4;
         const dec = decodeVarInt(buf, pos + 1);
+        if (!dec.valid || dec.length === 0) break;
         const remainingLength = dec.value;
         const packetStart = pos;
         const packetEnd = pos + 1 + dec.length + remainingLength;
