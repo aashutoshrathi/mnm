@@ -95,10 +95,10 @@ function resolveStrokeSettings(team, y, height) {
   return { team: padColorMode, tool, width, color };
 }
 
-function padPos(e) {
+function padPos(e, rect = null) {
   if (!padCanvas) return { x: 0, y: 0 };
-  const rect = padCanvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const r = rect || padCanvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 
 function drawDivider(width, height) {
@@ -854,11 +854,12 @@ export function wireDuoPad() {
         return;
       }
       e.preventDefault();
-      const subEvents = (typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null) || [e];
+      const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+      const subEvents = (coalesced && coalesced.length > 0) ? coalesced : [e];
       const rect = padCanvas.getBoundingClientRect();
 
       for (const ev of subEvents) {
-        const p = padPos(ev);
+        const p = padPos(ev, rect);
         padStroke(last, p, last.color, last.width, last.tool, last.strokeId);
 
         if (rect.width > 0 && rect.height > 0) {
@@ -876,6 +877,7 @@ export function wireDuoPad() {
 
     const endPointer = (e) => {
       const last = padPointers.get(e.pointerId);
+      flushStrokeBatch();
       if (last && last.stroke && last.stroke.segments.length > 0) {
         strokeHistory.push(last.stroke);
         if (padColorMode !== 'split' && typeof sendP2P === 'function') {
@@ -883,7 +885,6 @@ export function wireDuoPad() {
         }
       }
       padPointers.delete(e.pointerId);
-      flushStrokeBatch();
     };
 
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => {
