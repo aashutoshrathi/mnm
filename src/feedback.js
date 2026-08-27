@@ -150,7 +150,8 @@ export function victoryFanfare() {
 /* -------------------------------------------------------------- haptics -- */
 
 export function buzz(pattern) {
-  if (!settings.haptics || !navigator.vibrate) return;
+  if (!settings.haptics) return;
+  if (typeof navigator === 'undefined' || !navigator.vibrate) return;
   try {
     navigator.vibrate(pattern);
   } catch (e) {
