@@ -110,3 +110,4 @@ console.log('Verifying all 6 User Requirements...\n');
 }
 
 console.log('\nALL 6 USER REQUIREMENTS VERIFIED AND PASSED SUCCESSFULLY!');
+process.exit(0);
