@@ -974,3 +974,41 @@ body:not(.mode-synced) #show-invite { display: none; }
     padding-right: max(18px, env(safe-area-inset-right));
   }
 }
+
+/* -------------------------------------------------------- inline-style utilities */
+
+.setup-header { padding: 14px 0 24px; }
+.setup-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.lbl-start { margin-top: 12px; align-items: flex-start; }
+.sub-flex { flex: 1; }
+.swatch-red { background: var(--red); }
+.swatch-blue { background: var(--blue); }
+.namerow-gap { margin-bottom: 9px; }
+.text-center { text-align: center; }
+.mt-8 { margin-top: 8px; }
+.mt-10 { margin-top: 10px; }
+.mt-12 { margin-top: 12px; }
+.mt-14 { margin-top: 14px; }
+.mt-16 { margin-top: 16px; }
+.mt-20 { margin-top: 20px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-18 { margin-bottom: 18px; }
+.margin-0 { margin: 0; }
+.margin-0-auto { margin: 0; width: auto; }
+.margin-16-0 { margin: 16px 0; }
+.flex-spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.flex-spread-12 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.flex-spread-10 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.flex-spread-start { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.volume-row-inner { width: 100%; }
+.volume-row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.full-width { width: 100%; }
+.font-12 { font-size: 12px; }
+.team-red-text { color: var(--red); font-weight: 800; font-family: var(--display); }
+.team-blue-text { color: var(--blue); font-weight: 800; font-family: var(--display); }
+.bg-white { background: #FFFFFF; }
+.bg-yellow { background: #FFE14D; }
+.bg-red { background: #FF4262; }
+.bg-blue { background: #3D9BFF; }
+.bg-green { background: #2EE898; }

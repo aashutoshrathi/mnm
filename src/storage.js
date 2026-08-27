@@ -51,6 +51,11 @@ export const ADAPTERS = { host: hostAdapter, memory: memoryAdapter };
 /**
  * @param {Array} candidates adapters in order of preference
  * @returns {{get:Function, set:Function, name:string, durable:boolean}}
+ *
+ * The first available adapter is selected once at construction time and never
+ * re-evaluated. If a more durable backend becomes available later (e.g. a
+ * sandboxed iframe is granted localStorage access), the store will not switch.
+ * Re-create the store if that matters for your runtime.
  */
 export function createStore(candidates = [hostAdapter, memoryAdapter]) {
   const chosen = candidates.find((a) => a.available()) || memoryAdapter;

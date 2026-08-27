@@ -14,11 +14,15 @@
     "test:dom": "node build.mjs && node test/dom.mjs",
     "test:e2e": "node build.mjs && node test/e2e-multidevice.mjs",
     "test:creative": "node build.mjs && node test/e2e-creative-match.mjs",
-    "test:all": "npm run test && npm run test:dom && node test/e2e-multidevice.mjs && node test/e2e-creative-match.mjs && node test/e2e-twoplayer-fixes.mjs",
+    "test:all": "npm run test && npm run test:dom && node test/e2e-multidevice.mjs && node test/e2e-creative-match.mjs && node test/e2e-twoplayer-fixes.mjs && node test/e2e-user-requests.mjs",
+    "lint": "eslint src/ test/ build.mjs",
+    "format": "prettier --write src/ test/ build.mjs *.json",
     "start": "node build.mjs && python3 -m http.server 8080"
   },
   "devDependencies": {
-    "jsdom": "^30.0.0"
+    "eslint": "^9.0.0",
+    "jsdom": "^30.0.0",
+    "prettier": "^3.0.0"
   },
   "keywords": [
     "pictionary",

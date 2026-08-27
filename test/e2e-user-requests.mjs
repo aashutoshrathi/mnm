@@ -1,63 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { strict as assert } from 'node:assert';
-import { JSDOM } from 'jsdom';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-async function boot({ hash = '' } = {}) {
-  const html = await readFile(join(root, 'dist', 'index.html'), 'utf8');
-  const dom = new JSDOM(html, {
-    runScripts: 'dangerously',
-    url: `https://example.test/${hash}`,
-    pretendToBeVisual: true,
-    beforeParse(window) {
-      window.AudioContext = class {
-        constructor() {
-          this.state = 'running';
-          this.currentTime = 0;
-          this.destination = {};
-        }
-        resume() {}
-        createOscillator() {
-          return {
-            frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-            start() {},
-            stop() {},
-          };
-        }
-        createGain() {
-          return {
-            gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-          };
-        }
-      };
-      window.navigator.vibrate = () => true;
-      window.HTMLCanvasElement.prototype.getContext = () => null;
-      window.scrollTo = () => {};
-      window.BroadcastChannel = globalThis.BroadcastChannel;
-      window.WebSocket = globalThis.WebSocket;
-    },
-  });
-
-  await new Promise((r) => setTimeout(r, 60));
-  return dom;
-}
-
-const $ = (dom, id) => dom.window.document.getElementById(id);
-const active = (dom) => dom.window.document.querySelector('.screen.is-active')?.id;
-const click = (dom, idOrEl) => {
-  const el = typeof idOrEl === 'string' ? $(dom, idOrEl) : idOrEl;
-  if (!el) throw new Error(`Click target not found: ${idOrEl}`);
-  el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
-const pickSegment = (dom, segId, value) => {
-  const btn = $(dom, segId).querySelector(`button[data-v="${value}"]`);
-  btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
+import { boot, $, active, click, pickSegment } from './helpers.mjs';
 
 console.log('Verifying all 6 User Requirements...\n');
 
@@ -168,3 +110,4 @@ console.log('Verifying all 6 User Requirements...\n');
 }
 
 console.log('\nALL 6 USER REQUIREMENTS VERIFIED AND PASSED SUCCESSFULLY!');
+process.exit(0);

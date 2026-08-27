@@ -8,8 +8,8 @@ No build step required, no dependencies at runtime, no accounts, no backend.
 One HTML file and a folder of ES modules.
 
 ```
-npm test          # 45 unit tests (zero dev dependencies)
-npm run test:dom  # 20 integration tests in jsdom
+npm test          # 49 unit tests (zero dev dependencies)
+npm run test:dom  # 24 integration tests in jsdom
 npm run build     # bundle everything into dist/index.html
 npm start         # build + serve on http://localhost:8080
 ```

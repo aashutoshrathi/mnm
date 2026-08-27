@@ -31,18 +31,18 @@
 
   <!-- ==================== SETUP ==================== -->
   <section class="screen is-active" id="s-setup">
-    <header style="padding:14px 0 24px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+    <header class="setup-header">
+      <div class="setup-header-row">
         <div>
           <p class="eyebrow">Pictionary, refereed</p>
-          <h1 style="margin-top:8px">Marker&nbsp;&amp;<br>Mayhem</h1>
+          <h1 class="mt-8">Marker&nbsp;&amp;<br>Mayhem</h1>
         </div>
         <button type="button" class="iconbtn" id="open-settings" aria-label="Audio and haptics settings" title="Audio and haptics settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
       </div>
-      <div class="lbl" style="margin-top:12px;align-items:flex-start">
-        <p class="sub" style="flex:1">One word, both teams drawing it at once. I hold the word, run the clock, and keep the tally.</p>
+      <div class="lbl" class="lbl-start">
+        <p class="sub" class="sub-flex">One word, both teams drawing it at once. I hold the word, run the clock, and keep the tally.</p>
         <button class="info" aria-expanded="false" aria-label="How a round works">i</button>
       </div>
       <p class="hint">A round goes: the picking team chooses a theme, then one of three words worth 1, 2 or 3 points. Both teams draw that same word at the same time. First team to guess it takes the points. The picking team alternates each round.</p>
@@ -59,12 +59,12 @@
       <div class="lbl"><span class="eyebrow">Teams</span>
         <button class="info" aria-expanded="false" aria-label="About team names">i</button></div>
       <p class="hint">These names appear on the two scoring buttons and the tally board. Rename either team mid-game from the scoreboard, so nicknames that emerge over the night are easy to adopt.</p>
-      <div class="namerow" style="margin-bottom:9px">
-        <span class="swatch" style="background:var(--red)"></span>
+      <div class="namerow" class="namerow namerow-gap">
+        <span class="swatch" class="swatch swatch-red"></span>
         <input type="text" id="n0" value="Red" maxlength="18" aria-label="Team one name">
       </div>
       <div class="namerow">
-        <span class="swatch" style="background:var(--blue)"></span>
+        <span class="swatch" class="swatch swatch-blue"></span>
         <input type="text" id="n1" value="Blue" maxlength="18" aria-label="Team two name">
       </div>
     </div>
@@ -134,8 +134,8 @@
 
     <div class="mt">
       <button class="btn btn--yellow" id="go" data-haptic="20">Start a new game</button>
-      <button class="btn btn--ghost btn--sm" id="open-join" style="margin-top:10px">Join a game on this phone</button>
-      <div class="field" id="rejoin-field" hidden style="margin-top:14px">
+      <button class="btn btn--ghost btn--sm" id="open-join" class="mt-10">Join a game on this phone</button>
+      <div class="field" id="rejoin-field" hidden class="mt-14">
         <div class="save">
           <div class="meta">
             <div class="stitle">Rejoin</div>
@@ -160,9 +160,9 @@
 
     <div class="board" id="board"></div>
     <div class="renamer" id="renamer">
-      <div class="namerow"><span class="swatch" style="background:var(--red)"></span>
+      <div class="namerow"><span class="swatch" class="swatch swatch-red"></span>
         <input type="text" id="r0" maxlength="18" aria-label="Rename team one"></div>
-      <div class="namerow"><span class="swatch" style="background:var(--blue)"></span>
+      <div class="namerow"><span class="swatch" class="swatch swatch-blue"></span>
         <input type="text" id="r1" maxlength="18" aria-label="Rename team two"></div>
       <button class="btn btn--sm" id="rename-save">Save names</button>
     </div>
@@ -186,11 +186,11 @@
       <div class="ready-box" id="host-ready-box" hidden>
         <div class="ready-head">Drawer readiness</div>
         <div class="ready-row">
-          <span class="ready-team"><span class="team-dot" style="background:var(--red)"></span> <span id="hr-host-name">Red</span></span>
+          <span class="ready-team"><span class="team-dot" class="swatch swatch-red"></span> <span id="hr-host-name">Red</span></span>
           <button class="btn btn--sm btn--yellow" id="hr-host-btn">I'm ready</button>
         </div>
         <div class="ready-row">
-          <span class="ready-team"><span class="team-dot" style="background:var(--blue)"></span> <span id="hr-guest-name">Blue</span></span>
+          <span class="ready-team"><span class="team-dot" class="swatch swatch-blue"></span> <span id="hr-guest-name">Blue</span></span>
           <span class="ready-status waiting" id="hr-guest-status">Waiting for drawer…</span>
         </div>
       </div>
@@ -199,7 +199,7 @@
     <div class="stack">
       <button class="btn" id="reveal" data-haptic="20">We're the drawers: deal us in</button>
       <button class="btn btn--ghost btn--sm" id="pause">Pause and save for later</button>
-      <div style="text-align:center"><button class="linkbtn" id="show-invite">Show the join code again</button></div>
+      <div class="text-center"><button class="linkbtn" id="show-invite">Show the join code again</button></div>
     </div>
   </section>
 
@@ -212,7 +212,7 @@
         <button class="linkbtn" id="wrap-theme">Wrap up</button>
       </div>
     </div>
-    <p class="sub" style="margin-bottom:16px">Pick a theme. Everyone gets told which one you chose - just not the word.</p>
+    <p class="sub" class="mb-16">Pick a theme. Everyone gets told which one you chose - just not the word.</p>
     <div class="themes" id="themes"></div>
   </section>
 
@@ -243,13 +243,13 @@
       <div class="stroke"><i id="stroke"></i></div>
     </div>
     <div class="drawfoot">
-      <p class="eyebrow" style="text-align:center">First team to shout it wins the points</p>
+      <p class="eyebrow" class="text-center">First team to shout it wins the points</p>
       <button class="btn btn--red" id="got0" data-haptic="34">Red got it</button>
       <button class="btn btn--blue" id="got1" data-haptic="34">Blue got it</button>
       <button class="btn btn--ghost btn--sm" id="giveup">Nobody got it</button>
       <button class="btn btn--yellow" id="guest-done">Round over</button>
-      <div style="text-align:center"><button class="linkbtn" id="duo-toggle">Open Drawing Board</button></div>
-      <div style="text-align:center"><button class="linkbtn" id="wrap-draw">Wrap up game</button></div>
+      <div class="text-center"><button class="linkbtn" id="duo-toggle">Open Drawing Board</button></div>
+      <div class="text-center"><button class="linkbtn" id="wrap-draw">Wrap up game</button></div>
     </div>
   </section>
 
@@ -269,19 +269,19 @@
     <div class="lobby-box" id="lobby-box">
       <div class="lobby-head">Room lobby</div>
       <div class="lobby-row">
-        <span class="lobby-team"><span class="team-dot" style="background:var(--red)"></span> <span id="lobby-host-name">Red (Host)</span></span>
+        <span class="lobby-team"><span class="team-dot" class="swatch swatch-red"></span> <span id="lobby-host-name">Red (Host)</span></span>
         <span class="lobby-status ready" id="lobby-host-status">✓ Ready</span>
       </div>
       <div class="lobby-row">
-        <span class="lobby-team"><span class="team-dot" style="background:var(--blue)"></span> <span id="lobby-guest-name">Blue</span></span>
+        <span class="lobby-team"><span class="team-dot" class="swatch swatch-blue"></span> <span id="lobby-guest-name">Blue</span></span>
         <span class="lobby-status waiting" id="lobby-guest-status">Waiting for join…</span>
       </div>
     </div>
 
-    <p class="sub" id="invite-qr-note" style="margin-top:16px"></p>
+    <p class="sub" id="invite-qr-note" class="mt-16"></p>
     <p class="sub urlline" id="invite-url"></p>
 
-    <div class="lbl" style="margin-top:20px">
+    <div class="lbl" class="mt-20">
       <span class="eyebrow">How the other phones join</span>
       <button class="info" aria-expanded="false" aria-label="About joining">i</button>
     </div>
@@ -299,7 +299,7 @@
       <button class="linkbtn" id="join-back">Back</button>
     </div>
 
-    <p class="sub" style="margin-bottom:18px">Type the eight characters from the host's phone, or scan the code.</p>
+    <p class="sub" class="mb-18">Type the eight characters from the host's phone, or scan the code.</p>
 
     <div class="field">
       <input type="text" id="join-code" class="codeinput" maxlength="12" placeholder="K7M3 QP2X"
@@ -342,19 +342,19 @@
           <button class="linkbtn" id="guest-rename-toggle">Edit team name</button>
         </div>
         <div class="guest-renamer" id="guest-renamer" hidden>
-          <div class="field" style="margin-top:8px">
+          <div class="field" class="mt-8">
             <label for="gr-name">Custom team name</label>
             <input type="text" id="gr-name" maxlength="20" placeholder="Enter team name">
           </div>
-          <div class="cluster" style="margin-top:8px">
+          <div class="cluster" class="mt-8">
             <button class="btn btn--sm btn--yellow" id="gr-save">Save name</button>
             <button class="btn btn--ghost btn--sm" id="gr-cancel">Cancel</button>
           </div>
         </div>
       </div>
 
-      <div class="guest-action-stack" id="guest-action-stack" style="margin:16px 0">
-        <div class="secret-card-preview" id="guest-preview-box" style="margin-bottom:12px">
+      <div class="guest-action-stack" id="guest-action-stack" class="margin-16-0">
+        <div class="secret-card-preview" id="guest-preview-box" class="mb-12">
           <span class="preview-theme" id="guest-theme">🎨 Objects</span>
           <span class="preview-worth" id="guest-worth">Worth 2</span>
         </div>
@@ -369,11 +369,11 @@
       <div class="ready-box" id="guest-ready-box" hidden>
         <div class="ready-head">Drawer readiness</div>
         <div class="ready-row">
-          <span class="ready-team"><span class="team-dot" id="gr-my-dot" style="background:var(--blue)"></span> <span id="gr-my-name">Blue</span> (You)</span>
+          <span class="ready-team"><span class="team-dot" id="gr-my-dot" class="swatch swatch-blue"></span> <span id="gr-my-name">Blue</span> (You)</span>
           <button class="btn btn--sm btn--yellow" id="gr-my-btn">I'm ready</button>
         </div>
         <div class="ready-row">
-          <span class="ready-team"><span class="team-dot" style="background:var(--red)"></span> <span id="gr-other-name">Red</span></span>
+          <span class="ready-team"><span class="team-dot" class="swatch swatch-red"></span> <span id="gr-other-name">Red</span></span>
           <span class="ready-status waiting" id="gr-other-status">Waiting for drawer…</span>
         </div>
       </div>
@@ -381,7 +381,7 @@
 
     <div class="roundstepper">
       <button class="btn btn--ghost btn--sm" id="guest-back" aria-label="Previous round">←</button>
-      <span class="sub" style="font-size:12px">Step round if out of sync</span>
+      <span class="sub" class="font-12">Step round if out of sync</span>
       <button class="btn btn--ghost btn--sm" id="guest-fwd" aria-label="Next round">→</button>
     </div>
   </section>
@@ -399,7 +399,7 @@
     </div>
     <div class="stack">
       <button class="btn btn--yellow" id="next" data-haptic="20">Next round</button>
-      <div style="text-align:center"><button class="linkbtn" id="wrap-result">Wrap up game</button></div>
+      <div class="text-center"><button class="linkbtn" id="wrap-result">Wrap up game</button></div>
     </div>
   </section>
 
@@ -446,7 +446,7 @@
 
     <!-- In One-Phone mode: Top team (Red) controls -->
     <div class="pad-solo-top-controls" id="pad-red-controls" hidden>
-      <span class="pad-team-tag" style="color:var(--red);font-weight:800;font-family:var(--display)" id="red-bar-label">Red</span>
+      <span class="pad-team-tag" class="team-red-text" id="red-bar-label">Red</span>
       <div class="pad-control-group" role="toolbar" aria-label="Red Tools">
         <button type="button" class="pad-icon-btn is-active" id="red-tool-pen" title="Red Pen">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
@@ -461,9 +461,9 @@
         <button type="button" class="pad-size-btn" data-team="red" data-size="lg"><span class="dot dot--lg"></span></button>
       </div>
       <div class="pad-colors" role="toolbar" aria-label="Red Palette">
-        <button type="button" class="pad-color-swatch is-active" data-team="red" data-color="#FF4262" style="background:#FF4262"></button>
-        <button type="button" class="pad-color-swatch" data-team="red" data-color="#FFFFFF" style="background:#FFFFFF"></button>
-        <button type="button" class="pad-color-swatch" data-team="red" data-color="#FFE14D" style="background:#FFE14D"></button>
+        <button type="button" class="pad-color-swatch is-active" data-team="red" data-color="#FF4262" class="bg-red"></button>
+        <button type="button" class="pad-color-swatch" data-team="red" data-color="#FFFFFF" class="bg-white"></button>
+        <button type="button" class="pad-color-swatch" data-team="red" data-color="#FFE14D" class="bg-yellow"></button>
       </div>
       <button type="button" class="pad-action-btn" id="red-undo" title="Red Undo">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
@@ -513,9 +513,9 @@
 
     <div class="pad-colors" id="pad-colors" role="toolbar" aria-label="Color palette">
       <button type="button" class="pad-color-swatch is-active" data-color="team" id="swatch-team" title="Team color" aria-label="Team color"></button>
-      <button type="button" class="pad-color-swatch" data-color="#FFFFFF" style="background:#FFFFFF" title="White" aria-label="White color"></button>
-      <button type="button" class="pad-color-swatch" data-color="#FFE14D" style="background:#FFE14D" title="Yellow" aria-label="Yellow color"></button>
-      <button type="button" class="pad-color-swatch" data-color="#2EE898" style="background:#2EE898" title="Green" aria-label="Green color"></button>
+      <button type="button" class="pad-color-swatch" data-color="#FFFFFF" class="bg-white" title="White" aria-label="White color"></button>
+      <button type="button" class="pad-color-swatch" data-color="#FFE14D" class="bg-yellow" title="Yellow" aria-label="Yellow color"></button>
+      <button type="button" class="pad-color-swatch" data-color="#2EE898" class="bg-green" title="Green" aria-label="Green color"></button>
     </div>
 
     <span class="padtools">
@@ -529,7 +529,7 @@
 
   <!-- In One-Phone mode: Bottom team (Blue) controls bar -->
   <div class="padbar padbar--bottom" id="pad-blue-controls" hidden>
-    <span class="pad-team-tag" style="color:var(--blue);font-weight:800;font-family:var(--display)" id="blue-bar-label">Blue</span>
+    <span class="pad-team-tag" class="team-blue-text" id="blue-bar-label">Blue</span>
     <div class="pad-control-group" role="toolbar" aria-label="Blue Tools">
       <button type="button" class="pad-icon-btn is-active" id="blue-tool-pen" title="Blue Pen">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
@@ -544,9 +544,9 @@
       <button type="button" class="pad-size-btn" data-team="blue" data-size="lg"><span class="dot dot--lg"></span></button>
     </div>
     <div class="pad-colors" role="toolbar" aria-label="Blue Palette">
-      <button type="button" class="pad-color-swatch is-active" data-team="blue" data-color="#3D9BFF" style="background:#3D9BFF"></button>
-      <button type="button" class="pad-color-swatch" data-team="blue" data-color="#FFFFFF" style="background:#FFFFFF"></button>
-      <button type="button" class="pad-color-swatch" data-team="blue" data-color="#FFE14D" style="background:#FFE14D"></button>
+      <button type="button" class="pad-color-swatch is-active" data-team="blue" data-color="#3D9BFF" class="bg-blue"></button>
+      <button type="button" class="pad-color-swatch" data-team="blue" data-color="#FFFFFF" class="bg-white"></button>
+      <button type="button" class="pad-color-swatch" data-team="blue" data-color="#FFE14D" class="bg-yellow"></button>
     </div>
     <button type="button" class="pad-action-btn" id="blue-undo" title="Blue Undo">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
@@ -575,16 +575,16 @@
 
 <div class="modal" id="share-modal" role="dialog" aria-modal="true" aria-labelledby="sh-title">
   <div class="sheet">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
-      <h3 id="sh-title" style="margin:0">Share card</h3>
-      <div class="seg seg--sm" id="share-tabs" style="margin:0;width:auto">
+    <div class="flex-spread-10">
+      <h3 id="sh-title" class="margin-0">Share card</h3>
+      <div class="seg seg--sm" id="share-tabs" class="margin-0-auto">
         <button type="button" class="is-active" id="tab-tally" data-tab="tally">Tally</button>
         <button type="button" id="tab-gallery" data-tab="gallery">Gallery</button>
       </div>
     </div>
     <div class="shot" id="shot"></div>
     <p class="sub footnote" id="sh-hint">Long-press the image to save it.</p>
-    <div class="stack" style="margin-top:14px">
+    <div class="stack" class="mt-14">
       <button class="btn btn--yellow" id="sh-share" data-haptic="20">Share or save</button>
       <button class="btn btn--ghost btn--sm" id="sh-close">Close</button>
     </div>
@@ -593,8 +593,8 @@
 
 <div class="modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="set-title">
   <div class="sheet">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px">
-      <h3 id="set-title" style="margin:0">Audio & Haptics</h3>
+    <div class="flex-spread-12">
+      <h3 id="set-title" class="margin-0">Audio & Haptics</h3>
       <button type="button" class="linkbtn" id="settings-close" aria-label="Close settings">Done</button>
     </div>
 
@@ -611,8 +611,8 @@
       </div>
 
       <div class="settings-row" id="volume-row">
-        <div style="width:100%">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="full-width">
+          <div class="volume-row-top">
             <span class="settings-label">Master volume</span>
             <span class="settings-val" id="set-volume-val">75%</span>
           </div>

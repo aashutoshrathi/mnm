@@ -13,126 +13,8 @@
  *   Act VI:  Match Replay Gallery Poster Export & Return to Lobby
  */
 
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { strict as assert } from 'node:assert';
-import { JSDOM } from 'jsdom';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-async function bootPlayerDevice({ name = 'Player', hash = '' } = {}) {
-  const html = await readFile(join(root, 'dist', 'index.html'), 'utf8');
-  const dom = new JSDOM(html, {
-    runScripts: 'dangerously',
-    url: `https://marker-mayhem.game/${hash}`,
-    pretendToBeVisual: true,
-    beforeParse(window) {
-      window.AudioContext = class {
-        constructor() {
-          this.state = 'running';
-          this.currentTime = 0;
-          this.destination = {};
-        }
-        resume() {}
-        createOscillator() {
-          return {
-            frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-            start() {},
-            stop() {},
-          };
-        }
-        createGain() {
-          return {
-            gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-          };
-        }
-      };
-      window.navigator.vibrate = () => true;
-      window.HTMLCanvasElement.prototype.getContext = () => ({
-        clearRect() {},
-        beginPath() {},
-        moveTo() {},
-        lineTo() {},
-        stroke() {},
-        fill() {},
-        arc() {},
-        scale() {},
-        save() {},
-        restore() {},
-        drawImage() {},
-        setTransform() {},
-        translate() {},
-        rotate() {},
-        fillRect() {},
-        fillText() {},
-        measureText() {
-          return { width: 42 };
-        },
-        rect() {},
-        roundRect() {},
-        clip() {},
-        setLineDash() {},
-      });
-      window.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/png;base64,mockCanvasData';
-      window.HTMLCanvasElement.prototype.toBlob = (cb) => cb(new window.Blob(['mockPngData'], { type: 'image/png' }));
-      window.scrollTo = () => {};
-      window.BroadcastChannel = globalThis.BroadcastChannel;
-      window.WebSocket = globalThis.WebSocket;
-    },
-  });
-
-  await new Promise((r) => setTimeout(r, 60));
-  return dom;
-}
-
-const $ = (dom, id) => dom.window.document.getElementById(id);
-const active = (dom) => dom.window.document.querySelector('.screen.is-active')?.id;
-
-const click = (dom, target) => {
-  const el = typeof target === 'string' ? $(dom, target) : target;
-  if (!el) throw new Error(`Click target not found: ${target}`);
-  el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
-
-const pickSegment = (dom, segId, value) => {
-  const btn = $(dom, segId).querySelector(`button[data-v="${value}"]`);
-  if (!btn) throw new Error(`Option "${value}" not found in #${segId}`);
-  btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
-
-const drawFakeStroke = (dom, { points = [{ x: 50, y: 50 }, { x: 120, y: 120 }] } = {}) => {
-  const canvas = $(dom, 'pad-canvas');
-  if (!canvas) return;
-  const rect = { width: 360, height: 600, left: 0, top: 0 };
-  canvas.getBoundingClientRect = () => rect;
-
-  const [p0, ...rest] = points;
-  canvas.dispatchEvent(new dom.window.PointerEvent('pointerdown', {
-    clientX: p0.x,
-    clientY: p0.y,
-    pointerId: 1,
-    bubbles: true,
-  }));
-
-  for (const pt of rest) {
-    canvas.dispatchEvent(new dom.window.PointerEvent('pointermove', {
-      clientX: pt.x,
-      clientY: pt.y,
-      pointerId: 1,
-      bubbles: true,
-    }));
-  }
-
-  canvas.dispatchEvent(new dom.window.PointerEvent('pointerup', {
-    clientX: points[points.length - 1].x,
-    clientY: points[points.length - 1].y,
-    pointerId: 1,
-    bubbles: true,
-  }));
-};
+import { boot, $, active, click, pickSegment, drawFakeStroke } from './helpers.mjs';
 
 console.log('================================================================');
 console.log('  MARKER & MAYHEM - TWO-PLAYER LIVE MATCH EXPERIENCE SIMULATION');
@@ -142,7 +24,7 @@ console.log('================================================================\n'
  * ACT I: Match Setup, Room Invitation & Live Lobby Presence
  * ------------------------------------------------------------------------- */
 console.log('ACT I: Room Setup & Live Multi-Device Lobby');
-const host = await bootPlayerDevice({ name: 'Host (The Doodlers)' });
+const host = await boot({ mockCanvasCtx: true });
 
 // 1. Host customizes match settings
 pickSegment(host, 'seg-devices', 'host');
@@ -160,9 +42,9 @@ assert.ok(joinCode.length > 0, 'Lobby must display formatted join code');
 console.log(`  [PASS] 1. Host initialized room with code: "${joinCode}"`);
 
 // 2. Guest scans QR / opens join link
-const guest = await bootPlayerDevice({
-  name: 'Guest (Pixel Picassos)',
+const guest = await boot({
   hash: inviteUrl.slice(inviteUrl.indexOf('#')),
+  mockCanvasCtx: true,
 });
 await new Promise((r) => setTimeout(r, 80));
 

@@ -10,94 +10,10 @@
  * Requires jsdom (a dev-only dependency): npm install
  */
 
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { strict as assert } from 'node:assert';
-import { JSDOM } from 'jsdom';
+import { boot, $, active, visible, click, pickSegment, createRunner } from './helpers.mjs';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-let passed = 0;
-let failed = 0;
-const failures = [];
-
-async function test(name, fn) {
-  try {
-    await fn();
-    passed++;
-    console.log(`  ok   ${name}`);
-  } catch (err) {
-    failed++;
-    failures.push({ name, err });
-    console.log(`  FAIL ${name}`);
-    console.log(`       ${String(err.message).split('\n')[0]}`);
-  }
-}
-
-/** A fresh document with the browser APIs the app touches but jsdom lacks. */
-async function boot({ hash = '' } = {}) {
-  const html = await readFile(join(root, 'dist', 'index.html'), 'utf8');
-  const dom = new JSDOM(html, {
-    runScripts: 'dangerously',
-    url: `https://example.test/${hash}`,
-    pretendToBeVisual: true,
-    beforeParse(window) {
-      window.AudioContext = class {
-        constructor() {
-          this.state = 'running';
-          this.currentTime = 0;
-          this.destination = {};
-        }
-        resume() {}
-        createOscillator() {
-          return {
-            frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-            start() {},
-            stop() {},
-          };
-        }
-        createGain() {
-          return {
-            gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-          };
-        }
-      };
-      window.navigator.vibrate = () => true;
-      window.HTMLCanvasElement.prototype.getContext = () => null;
-      window.scrollTo = () => {};
-      window.BroadcastChannel = globalThis.BroadcastChannel;
-      window.WebSocket = globalThis.WebSocket;
-    },
-  });
-
-  // let the boot IIFE and its awaited storage reads settle
-  await new Promise((r) => setTimeout(r, 60));
-  return dom;
-}
-
-const $ = (dom, id) => dom.window.document.getElementById(id);
-const active = (dom) => dom.window.document.querySelector('.screen.is-active').id;
-const visible = (dom, id) => {
-  const el = $(dom, id);
-  if (!el || el.hidden) return false;
-  const styles = dom.window.getComputedStyle(el);
-  return styles.display !== 'none';
-};
-
-const click = (dom, idOrEl) => {
-  const el = typeof idOrEl === 'string' ? $(dom, idOrEl) : idOrEl;
-  assert.ok(el, `no element #${idOrEl}`);
-  el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
-
-const pickSegment = (dom, segId, value) => {
-  const btn = $(dom, segId).querySelector(`button[data-v="${value}"]`);
-  assert.ok(btn, `no option ${value} in #${segId}`);
-  btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
+const { test, group, report } = createRunner();
 
 console.log('\nbootstrap');
 
@@ -399,7 +315,11 @@ await test('a guest advancing lands on the next round', async () => {
   await new Promise((r) => setTimeout(r, 50));
 
   const first = $(guest, 'guest-word-text')?.textContent;
-  click(guest, 'guest-done');
+  // Host scores to end the round, then advances
+  click(host, 'got0');
+  await new Promise((r) => setTimeout(r, 50));
+  click(host, 'next');
+  await new Promise((r) => setTimeout(r, 50));
   assert.equal(active(guest), 's-guest');
   assert.match($(guest, 'guest-round').textContent, /Round 2/);
   click(guest, 'guest-start');
@@ -537,7 +457,6 @@ await test('guests reaching the round cap see completion state and can step back
       click(host, 'reveal');
     }
     await new Promise((res) => setTimeout(res, 20));
-    click(guest, 'guest-done');
     click(host, 'got0');
     if (r < 5) {
       click(host, 'next');
@@ -546,6 +465,10 @@ await test('guests reaching the round cap see completion state and can step back
   }
 
   await new Promise((res) => setTimeout(res, 40));
+
+  // Guest nudges past the round cap to see the completion state
+  click(guest, 'guest-fwd');
+  await new Promise((res) => setTimeout(res, 20));
   assert.equal(active(guest), 's-guest');
   assert.match($(guest, 'guest-head').textContent, /Game complete/);
   assert.equal($(guest, 'guest-start').textContent, 'Leave game');
@@ -607,14 +530,5 @@ await test('share modal switches between score tally and drawing gallery cards',
   dom.window.close();
 });
 
-console.log(`\n${'─'.repeat(52)}`);
-console.log(`${passed} passed, ${failed} failed`);
-if (failed) {
-  console.log('');
-  failures.forEach(({ name, err }) => {
-    console.log(`✗ ${name}`);
-    console.log(`  ${err.stack.split('\n').slice(0, 3).join('\n  ')}`);
-  });
-  process.exit(1);
-}
+report();
 process.exit(0);
