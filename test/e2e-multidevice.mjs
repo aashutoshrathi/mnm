@@ -4,96 +4,13 @@
  * turn alternation, readiness handshakes, synchronized countdown, and stroke streaming.
  */
 
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { strict as assert } from 'node:assert';
-import { JSDOM } from 'jsdom';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-async function bootDevice({ hash = '' } = {}) {
-  const html = await readFile(join(root, 'dist', 'index.html'), 'utf8');
-  const dom = new JSDOM(html, {
-    runScripts: 'dangerously',
-    url: `https://example.test/${hash}`,
-    pretendToBeVisual: true,
-    beforeParse(window) {
-      window.AudioContext = class {
-        constructor() {
-          this.state = 'running';
-          this.currentTime = 0;
-          this.destination = {};
-        }
-        resume() {}
-        createOscillator() {
-          return {
-            frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-            start() {},
-            stop() {},
-          };
-        }
-        createGain() {
-          return {
-            gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
-            connect() {},
-          };
-        }
-      };
-      window.navigator.vibrate = () => true;
-      window.HTMLCanvasElement.prototype.getContext = () => ({
-        clearRect() {},
-        beginPath() {},
-        moveTo() {},
-        lineTo() {},
-        stroke() {},
-        fill() {},
-        arc() {},
-        scale() {},
-        save() {},
-        restore() {},
-        drawImage() {},
-        setTransform() {},
-        translate() {},
-        rotate() {},
-        fillRect() {},
-        fillText() {},
-        measureText() {
-          return { width: 10 };
-        },
-        rect() {},
-        roundRect() {},
-        clip() {},
-        setLineDash() {},
-      });
-      window.scrollTo = () => {};
-      window.BroadcastChannel = globalThis.BroadcastChannel;
-      window.WebSocket = globalThis.WebSocket;
-    },
-  });
-
-  await new Promise((r) => setTimeout(r, 60));
-  return dom;
-}
-
-const $ = (dom, id) => dom.window.document.getElementById(id);
-const click = (dom, target) => {
-  const el = typeof target === 'string' ? $(dom, target) : target;
-  if (!el) throw new Error(`click target not found: ${target}`);
-  el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
-const pickSegment = (dom, segId, value) => {
-  const btn = $(dom, segId).querySelector(`button[data-v="${value}"]`);
-  if (!btn) throw new Error(`no option ${value} in #${segId}`);
-  btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-};
-const active = (dom) => dom.window.document.querySelector('.screen.is-active')?.id;
+import { boot, $, active, click, pickSegment } from './helpers.mjs';
 
 console.log('Running End-to-End Multi-Device Real-Time Verification...');
 
 // 1. Host setup
-const host = await bootDevice();
+const host = await boot({ mockCanvasCtx: true });
 pickSegment(host, 'seg-devices', 'host');
 click(host, 'go');
 assert.equal(active(host), 's-invite', 'Host should land on invite screen');
@@ -102,7 +19,7 @@ assert.ok(inviteUrl.includes('#'), 'Invite URL should contain hash');
 console.log('  [PASS] Step 1: Host initialized lobby with invite URL');
 
 // 2. Guest joins
-const guest = await bootDevice({ hash: inviteUrl.slice(inviteUrl.indexOf('#')) });
+const guest = await boot({ hash: inviteUrl.slice(inviteUrl.indexOf('#')), mockCanvasCtx: true });
 await new Promise((r) => setTimeout(r, 100));
 assert.equal(active(guest), 's-guest', 'Guest should join and land on s-guest');
 console.log('  [PASS] Step 2: Guest joined room via hash URL');

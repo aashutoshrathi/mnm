@@ -34,12 +34,15 @@ const MODULES = [
   'words.js',
   'sync.js',
   'share.js',
+  'share-controller.js',
   'confetti.js',
+  'clock.js',
   'game.js',
 ];
 
 const IMPORT_STATEMENT = /^\s*import\s[\s\S]*?from\s*'[^']*';\s*$/gm;
 const EXPORT_KEYWORD = /^export\s+(?=const|let|var|function|async function|class)/gm;
+const EXPORT_LIST = /^\s*export\s*\{[^}]*\};?\s*$/gm;
 const NAMESPACE_IMPORT = /^\s*import\s+\*\s+as\s+/m;
 const ALIASED_IMPORT = /\bas\s+\w+\s*[,}]/;
 const DEFAULT_EXPORT = /^export\s+default\b/m;
@@ -87,7 +90,7 @@ async function bundleScript() {
     const src = await readFile(join(root, 'src', name), 'utf8');
     assertBundlable(name, src);
     declarations.push({ name, decls: [...src.matchAll(DECLARATION)].map((m) => m[1]) });
-    const stripped = src.replace(IMPORT_STATEMENT, '').replace(EXPORT_KEYWORD, '');
+    const stripped = src.replace(IMPORT_STATEMENT, '').replace(EXPORT_KEYWORD, '').replace(EXPORT_LIST, '');
     parts.push(`/* ===== src/${name} ===== */\n${stripped.trim()}`);
   }
 
@@ -119,11 +122,13 @@ const SHELL = [
   './src/storage.js',
   './src/storage-web.js',
   './src/share.js',
+  './src/share-controller.js',
   './src/sync.js',
   './src/joincode.js',
   './src/qr.js',
   './src/scan.js',
   './src/confetti.js',
+  './src/clock.js',
 ];
 
 self.addEventListener('install', (event) => {

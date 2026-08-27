@@ -20,9 +20,7 @@ import { createStore, ADAPTERS } from './storage.js';
 import { webAdapter, sessionAdapter } from './storage-web.js';
 import {
   blip,
-  tock,
   buzz,
-  buzzer,
   victoryFanfare,
   settings,
   loadSettings,
@@ -31,7 +29,6 @@ import {
   hapticsSupported,
 } from './feedback.js';
 import { tallySVG } from './tally.js';
-import { renderShareCard, renderGalleryCard, exportCard, fontsReady } from './share.js';
 import { roundFor, syncCode, resetReplay } from './sync.js';
 import {
   newSeed,
@@ -59,6 +56,17 @@ import {
 } from './duo.js';
 import { burstConfetti, stopConfetti } from './confetti.js';
 import { connectP2P, disconnectP2P, sendP2P } from './p2p.js';
+import {
+  requestWakeLock,
+  releaseWakeLock,
+  paintClock,
+  runClock,
+  stopClock,
+  pauseClock,
+  resumeClock,
+  startRound,
+} from './clock.js';
+import { openShare, closeShare, updateShareCard } from './share-controller.js';
 
 /* ============================================================== constants */
 
@@ -140,7 +148,7 @@ function isGameActive() {
 }
 
 function show(id) {
-  if (id !== 's-win' && typeof stopConfetti === 'function') {
+  if (id !== 's-win') {
     stopConfetti();
   }
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('is-active'));
@@ -254,9 +262,31 @@ function updateAllTeamNamesUI() {
 
 function renderBoard(el) {
   if (!el) return;
-  el.innerHTML = S.teams
-    .map(
-      (t, i) => `
+
+  const existing = el.querySelectorAll('.teamrow');
+  const canUpdate = existing.length === S.teams.length;
+
+  if (canUpdate) {
+    S.teams.forEach((t, i) => {
+      const row = existing[i];
+      const nameEl = row.querySelector('.tname');
+      const tallyEl = row.querySelector('.tally');
+      const numEl = row.querySelector('.tnum');
+      const adjEl = row.querySelector('.adjust');
+      if (nameEl) nameEl.textContent = t.name;
+      if (tallyEl) tallyEl.innerHTML = tallySVG(t.score, TEAM_HEX[i], t.drawn);
+      if (numEl) {
+        numEl.textContent = t.score;
+        numEl.style.color = t.color;
+      }
+      if (adjEl) {
+        adjEl.classList.toggle('on', S.adjusting);
+      }
+    });
+  } else {
+    el.innerHTML = S.teams
+      .map(
+        (t, i) => `
       <div class="teamrow">
         <div class="tmeta">
           <div class="tname">${esc(t.name)}</div>
@@ -268,26 +298,27 @@ function renderBoard(el) {
         </div>
         <div class="tnum" style="color:${t.color}">${t.score}</div>
       </div>`
-    )
-    .join('');
+      )
+      .join('');
+
+    el.querySelectorAll('.adjust button').forEach((b) => {
+      b.onclick = () => {
+        const i = Number(b.parentElement.dataset.team);
+        S.teams[i].score = Math.max(0, S.teams[i].score + Number(b.dataset.step));
+        S.teams[i].drawn = S.teams[i].score;
+        renderBoard(el);
+        persist();
+        if (isHost()) {
+          sendP2P('SCORE_ADJUST', {
+            team0Score: S.teams[0].score,
+            team1Score: S.teams[1].score,
+          });
+        }
+      };
+    });
+  }
 
   S.teams.forEach((t) => (t.drawn = t.score));
-
-  el.querySelectorAll('.adjust button').forEach((b) => {
-    b.onclick = () => {
-      const i = Number(b.parentElement.dataset.team);
-      S.teams[i].score = Math.max(0, S.teams[i].score + Number(b.dataset.step));
-      S.teams[i].drawn = S.teams[i].score;
-      renderBoard(el);
-      persist();
-      if (isHost() && typeof sendP2P === 'function') {
-        sendP2P('SCORE_ADJUST', {
-          team0Score: S.teams[0].score,
-          team1Score: S.teams[1].score,
-        });
-      }
-    };
-  });
 }
 
 /* =========================================================== saved games */
@@ -599,7 +630,7 @@ function startHostSyncedRound() {
   $('got1').textContent = `${S.teams[1].name} got it`;
   show('s-draw');
 
-  if (typeof openDuoPad === 'function') {
+  {
     openDuoPad({
       colorMode: 'red',
       opponentTitle: `${S.teams[1].name} (Other Team)`,
@@ -610,7 +641,7 @@ function startHostSyncedRound() {
   }
 
   const endsAt = Date.now() + 3400 + S.len * 1000;
-  if (typeof sendP2P === 'function') {
+  {
     sendP2P('START_COUNTDOWN', { round: S.round, endsAt, len: S.len, card: S.card, theme: S.theme });
   }
 
@@ -623,7 +654,7 @@ function startHostSyncedRound() {
 
 function startGuestSyncedRound() {
   startGuestRound();
-  if (typeof openDuoPad === 'function') {
+  {
     openDuoPad({
       colorMode: 'blue',
       opponentTitle: `${S.teams[0].name} (Other Team)`,
@@ -779,7 +810,7 @@ function handleP2PMessage(msg) {
         $('got1').textContent = `${S.teams[1].name} got it`;
         show('s-draw');
 
-        if (typeof openDuoPad === 'function') {
+        {
           openDuoPad({
             colorMode: 'blue',
             opponentTitle: `${S.teams[0].name} (Other Team)`,
@@ -844,14 +875,14 @@ function handleP2PMessage(msg) {
     case 'SCORE':
       if (isGuest()) {
         stopClock();
-        if (typeof closeDuoPad === 'function') closeDuoPad();
-        if (typeof resetDuoPad === 'function') resetDuoPad();
+        closeDuoPad();
+        resetDuoPad();
         if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
         if (msg.team1Score !== undefined) S.teams[1].score = msg.team1Score;
         if (Array.isArray(msg.history)) {
           S.history = msg.history;
         } else if (S.card) {
-          const strokes = typeof getCurrentStrokes === 'function' ? getCurrentStrokes() : [];
+          const strokes = getCurrentStrokes();
           S.history.push({ r: msg.round, w: S.card.word, t: S.theme?.name || '', win: msg.winner, p: msg.pts, strokes });
         }
         if (S.rounds && S.round > S.rounds) {
@@ -952,7 +983,7 @@ function showInvite() {
     lgStatus.className = guestInLobby ? 'lobby-status ready' : 'lobby-status waiting';
   }
 
-  if (isHost() && S.code && typeof connectP2P === 'function') {
+  if (isHost() && S.code) {
     connectP2P({ code: S.code, role: 'host', onMessage: handleP2PMessage });
   }
 
@@ -983,7 +1014,7 @@ function showInvite() {
 function toHandoff() {
   hostReadyState = false;
   guestReadyState = false;
-  if (typeof resetDuoPad === 'function') resetDuoPad();
+  resetDuoPad();
 
   S.picker = (S.round - 1) % 2;
   const t = S.teams[S.picker];
@@ -1159,7 +1190,7 @@ function dealCards() {
 function selectCard(card) {
   S.card = card;
   if (isSynced()) {
-    if (typeof sendP2P === 'function') {
+    {
       sendP2P('WORD_SELECTED', {
         round: S.round,
         picker: S.picker,
@@ -1186,153 +1217,6 @@ function dealSyncedRound() {
   }
 }
 
-/* =============================================================== wake lock */
-
-let wakeLock = null;
-
-async function requestWakeLock() {
-  if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
-    try {
-      if (!wakeLock) {
-        const lock = await navigator.wakeLock.request('screen');
-        wakeLock = lock;
-        lock.addEventListener('release', () => {
-          if (wakeLock === lock) {
-            wakeLock = null;
-          }
-        });
-      }
-    } catch (e) {
-      /* wake lock is best effort (e.g. low battery mode or background tab) */
-      wakeLock = null;
-    }
-  }
-}
-
-function releaseWakeLock() {
-  if (wakeLock) {
-    const lock = wakeLock;
-    wakeLock = null;
-    try {
-      lock.release().catch(() => {});
-    } catch (e) {
-      /* no-op */
-    }
-  }
-}
-
-/* ================================================================== clock */
-
-const formatClock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-
-function paintClock() {
-  const ms = Math.max(0, S.endsAt - Date.now());
-  const left = Math.ceil(ms / 1000);
-  const el = $('clock');
-
-  el.textContent = formatClock(left);
-  el.className = 'clock' + (left <= 5 ? ' hot shake' : left <= 10 ? ' hot' : left <= 20 ? ' warn' : '');
-  $('stroke').style.transform = `scaleX(${ms / (S.len * 1000)})`;
-  $('stroke').style.background = left <= 10 ? '#FF4262' : left <= 20 ? '#FFD23F' : '#F7F4EC';
-
-  const padClock = $('pad-clock');
-  if (padClock) {
-    padClock.textContent = formatClock(left);
-    padClock.style.color =
-      left <= 10 ? '#FF4262' : left <= 20 ? '#FFD23F' : 'var(--paper)';
-  }
-
-  return left;
-}
-
-function runClock() {
-  clearInterval(S.ticker);
-  let nextTock = 0;
-  let high = true;
-  paintClock();
-  requestWakeLock();
-
-  S.ticker = setInterval(() => {
-    const left = paintClock();
-
-    const phase = TICK_PHASES.filter((p) => left <= p.from).pop();
-    if (phase && left > 0 && Date.now() >= nextTock) {
-      nextTock = Date.now() + phase.gap;
-      tock(high ? 2300 : 1700, phase.vol);
-      high = !high;
-      if (left <= 5) buzz(12);
-    }
-
-    if (left <= 0) {
-      stopClock();
-      buzzer();
-      if (isGuest()) {
-        $('res-eyebrow').textContent = `Round ${S.round}`;
-        $('verdict').textContent = 'Time expired';
-        $('verdict').style.color = 'rgba(247,244,236,.35)';
-        $('res-word').textContent = S.card?.word || '';
-        $('next').textContent = 'Waiting for host…';
-        $('next').disabled = true;
-        $('next').style.opacity = '0.6';
-        renderBoard($('board2'));
-        show('s-result');
-      } else {
-        finishRound(null);
-      }
-    }
-  }, 50);
-}
-
-function stopClock() {
-  clearInterval(S.ticker);
-  S.ticker = null;
-  S.pausedMs = null;
-  clearInterval(countdownTimer);
-  countdownTimer = null;
-  const overlay = $('countdown-overlay');
-  if (overlay) overlay.hidden = true;
-  releaseWakeLock();
-  closeDuoPad();
-}
-
-function pauseClock() {
-  if (!S.ticker) return;
-  clearInterval(S.ticker);
-  S.ticker = null;
-  S.pausedMs = Math.max(0, S.endsAt - Date.now());
-  releaseWakeLock();
-}
-
-function resumeClock() {
-  if (S.pausedMs === null) return;
-  S.endsAt = Date.now() + S.pausedMs;
-  S.pausedMs = null;
-  runClock();
-}
-
-function startRound(card) {
-  S.card = card;
-  if (typeof resetDuoPad === 'function') {
-    resetDuoPad();
-  }
-  $('draw-theme').textContent = S.theme.any ? '🎯 Anything goes' : `${S.theme.icon} ${S.theme.name}`;
-  $('draw-worth').textContent = `Worth ${card.pts}`;
-  $('got0').textContent = `${S.teams[0].name} got it`;
-  $('got1').textContent = `${S.teams[1].name} got it`;
-
-  S.endsAt = Date.now() + S.len * 1000;
-  S.pausedMs = null;
-  show('s-draw');
-  runClock();
-
-  if (!isSynced() && typeof openDuoPad === 'function') {
-    openDuoPad({
-      colorMode: 'split',
-      team0Name: S.teams[0].name,
-      team1Name: S.teams[1].name,
-    });
-  }
-}
 
 function applyPeek() {
   const el = $('peek');
@@ -1355,10 +1239,10 @@ function applyPeek() {
 
 function finishRound(winner) {
   stopClock();
-  if (typeof closeDuoPad === 'function') {
+  {
     closeDuoPad();
   }
-  if (typeof resetDuoPad === 'function') {
+  {
     resetDuoPad();
   }
 
@@ -1377,13 +1261,13 @@ function finishRound(winner) {
     $('verdict').style.color = S.teams[winner].color;
   }
 
-  const strokes = typeof getCurrentStrokes === 'function' ? getCurrentStrokes() : [];
+  const strokes = getCurrentStrokes();
   S.history.push({ r: S.round, w: word, t: themeName, win: winner, p: pts, strokes });
   $('res-word').textContent = word;
   renderBoard($('board2'));
   persist();
 
-  if (isHost() && typeof sendP2P === 'function') {
+  if (isHost()) {
     sendP2P('SCORE', {
       winner,
       pts,
@@ -1413,7 +1297,7 @@ function nextRound() {
   if (isGuest()) {
     return;
   }
-  if (typeof resetDuoPad === 'function') {
+  {
     resetDuoPad();
   }
   if (S.rounds && S.round >= S.rounds) {
@@ -1426,7 +1310,7 @@ function nextRound() {
   persist();
   toHandoff();
 
-  if (isHost() && typeof sendP2P === 'function') {
+  if (isHost()) {
     sendP2P('NEXT_ROUND', { round: S.round });
   }
 }
@@ -1451,7 +1335,7 @@ function endGame(champ, reason) {
   const c1 = TEAM_HEX[1];
   burstConfetti(champ.color === TEAM_COLORS[0] ? c0 : c1, champ.color === TEAM_COLORS[0] ? c1 : c0);
 
-  if (isHost() && typeof sendP2P === 'function') {
+  if (isHost()) {
     sendP2P('END_GAME', {
       champIndex: S.teams.indexOf(champ),
       reason: S.endReason,
@@ -1518,7 +1402,7 @@ async function wrapUp() {
 /* ============================================================= guest mode */
 
 function toGuestReady() {
-  if (typeof resetDuoPad === 'function') resetDuoPad();
+  resetDuoPad();
   guestReadyState = false;
   const overCap = Boolean(S.rounds && S.round > S.rounds);
   const head = $('guest-head');
@@ -1620,7 +1504,6 @@ function endGuestRound() {
     return;
   }
   stopClock();
-  S.round++;
   S.card = null;
   S.theme = null;
   saveLastJoin();
@@ -1636,7 +1519,7 @@ async function leaveGame() {
   });
   if (!ok) return;
   stopClock();
-  if (typeof disconnectP2P === 'function') disconnectP2P();
+  disconnectP2P();
   S.mode = 'solo';
   S.seed = null;
   S.code = null;
@@ -1710,7 +1593,7 @@ async function enterGuestMode(code, payload, round, playSound = true) {
   applyMode();
   await saveLastJoin();
   if (playSound) blip(760, 0.09);
-  if (typeof connectP2P === 'function') {
+  {
     connectP2P({ code: S.code, role: 'guest', onMessage: handleP2PMessage });
     sendP2P('PEER_JOINED', { name: S.teams[1].name });
     sendP2P('SYNC_REQUEST', { round: S.round });
@@ -1772,55 +1655,6 @@ async function offerRejoin() {
     await enterGuestMode(last.code, payload, last.round);
   };
 }
-
-/* ================================================================== share */
-
-let activeShareTab = 'tally';
-
-async function updateShareCard() {
-  const shot = $('shot');
-  shot.innerHTML = '';
-  $('sh-hint').textContent = 'Rendering…';
-
-  await fontsReady();
-  const gameData = {
-    teams: S.teams.map((t, i) => ({ name: t.name, score: t.score, color: TEAM_HEX[i] })),
-    rounds: S.history.length,
-    wordsUsed: isSynced() ? S.history.length : S.used.size,
-    reason: S.endReason,
-    history: S.history,
-  };
-
-  const canvas = activeShareTab === 'gallery' ? renderGalleryCard(gameData) : renderShareCard(gameData);
-  shot.appendChild(canvas);
-  $('sh-hint').textContent = 'Long-press the image to save it, or use the button below.';
-
-  $('sh-share').onclick = async () => {
-    const filename = `marker-mayhem-${activeShareTab}-${Date.now()}.png`;
-    const result = await exportCard(canvas, filename);
-    if (result === 'shared') {
-      toast('Shared');
-    } else if (result === 'downloaded') {
-      toast('Image saved');
-    } else if (result !== 'cancelled') {
-      toast('Long-press the image to save it');
-    }
-  };
-}
-
-async function openShare() {
-  const modal = $('share-modal');
-  modal.classList.add('on');
-  activeShareTab = 'tally';
-  const tabTally = $('tab-tally');
-  const tabGallery = $('tab-gallery');
-  if (tabTally) tabTally.classList.add('is-active');
-  if (tabGallery) tabGallery.classList.remove('is-active');
-
-  await updateShareCard();
-}
-
-const closeShare = () => $('share-modal').classList.remove('on');
 
 /* =============================================================== settings */
 
@@ -1951,7 +1785,7 @@ function wireEvents() {
     hrHostBtn.onclick = () => {
       hostReadyState = !hostReadyState;
       hrHostBtn.textContent = hostReadyState ? '✓ Ready (waiting)' : "I'm ready";
-      if (typeof sendP2P === 'function') {
+      {
         sendP2P('DRAWER_READY', { role: 'host', ready: hostReadyState, round: S.round });
       }
       if (hostReadyState && guestReadyState) {
@@ -1977,7 +1811,7 @@ function wireEvents() {
       }
       hostReadyState = true;
       if (hrHostBtn) hrHostBtn.textContent = '✓ Ready (waiting)';
-      if (typeof sendP2P === 'function') {
+      {
         sendP2P('DRAWER_READY', { role: 'host', ready: true, round: S.round });
       }
       startHostSyncedRound();
@@ -2002,7 +1836,7 @@ function wireEvents() {
   const veil = $('veil');
   if (veil) veil.onclick = () => $('veil').classList.remove('on');
 
-  if (typeof setPadScoreCallback === 'function') {
+  {
     setPadScoreCallback((action) => {
       stopClock();
       if (!isSynced()) {
@@ -2015,7 +1849,7 @@ function wireEvents() {
         else finishRound(null);
       } else if (isGuest()) {
         const winner = action === 'mine' ? 1 : (action === 'other' ? 0 : null);
-        if (typeof sendP2P === 'function') {
+        {
           sendP2P('FINISH_ROUND', { winner, round: S.round });
         }
       }
@@ -2127,7 +1961,7 @@ function wireEvents() {
     grMyBtn.onclick = () => {
       guestReadyState = !guestReadyState;
       grMyBtn.textContent = guestReadyState ? '✓ Ready (waiting)' : "I'm ready";
-      if (typeof sendP2P === 'function') {
+      {
         sendP2P('DRAWER_READY', { role: 'guest', ready: guestReadyState, round: S.round });
       }
     };
@@ -2149,7 +1983,7 @@ function wireEvents() {
     }
     guestReadyState = true;
     if (grMyBtn) grMyBtn.textContent = '✓ Ready (waiting)';
-    if (typeof sendP2P === 'function') {
+    {
       sendP2P('DRAWER_READY', { role: 'guest', ready: true, round: S.round });
     }
   };
@@ -2179,7 +2013,7 @@ function wireEvents() {
       }
       updateAllTeamNamesUI();
       $('guest-renamer').hidden = true;
-      if (typeof sendP2P === 'function') {
+      {
         sendP2P('RENAME_TEAM', { teamIndex: 1, name: S.teams[1].name });
       }
       toast(`Team name set to ${S.teams[1].name}`);
@@ -2219,7 +2053,7 @@ function wireEvents() {
         target: S.target,
       });
       persist();
-      if (typeof sendP2P === 'function') {
+      {
         sendP2P('REMATCH', {
           seed: S.seed,
           code: S.code,
@@ -2238,7 +2072,7 @@ function wireEvents() {
 
   $('reset').onclick = async () => {
     if (isGuest()) {
-      if (typeof disconnectP2P === 'function') disconnectP2P();
+      disconnectP2P();
       S.mode = 'solo';
       S.seed = null;
       S.code = null;
@@ -2265,7 +2099,7 @@ function wireEvents() {
     $('rename-toggle').textContent = 'Rename teams';
     persist();
     toHandoff();
-    if (typeof sendP2P === 'function') {
+    {
       sendP2P('RENAME_TEAM', { teamIndex: 0, name: S.teams[0].name });
       sendP2P('RENAME_TEAM', { teamIndex: 1, name: S.teams[1].name });
     }
@@ -2299,7 +2133,7 @@ function wireEvents() {
         paintClock();
         requestWakeLock();
       }
-      if (typeof sendP2P === 'function') {
+      {
         if (isGuest()) {
           sendP2P('SYNC_REQUEST', { round: S.round });
         } else if (isHost()) {
@@ -2344,7 +2178,7 @@ function wireEvents() {
       });
       if (ok) {
         stopClock();
-        if (typeof disconnectP2P === 'function') disconnectP2P();
+        disconnectP2P();
         S.mode = 'solo';
         S.seed = null;
         S.code = null;

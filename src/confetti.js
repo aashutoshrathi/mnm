@@ -28,9 +28,6 @@ export function burstConfetti(primaryColor = '#FF4262', secondaryColor = '#3D9BF
 
   const resolveHex = (c, fallback) => {
     if (!c || typeof c !== 'string') return fallback;
-    if (c.includes('--red')) return '#FF4262';
-    if (c.includes('--blue')) return '#3D9BFF';
-    if (c.includes('--yellow')) return '#FFD23F';
     return c.startsWith('#') || c.startsWith('rgb') ? c : fallback;
   };
 

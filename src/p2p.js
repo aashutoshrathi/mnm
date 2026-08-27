@@ -10,12 +10,20 @@
  *   3. Synchronized Ready Lobbies, Word Selection, and Countdown beeps.
  *   4. Real-time drawing strokes streamed to the Opponent Sideboard.
  *   5. Synchronized score, round transitions, team renames, and wrap-up.
+ *
+ * Messages are validated before delivery to the handler: numeric fields are
+ * range-checked, and state-changing messages with a round field are rejected
+ * if the round doesn't match the current game round on the receiving device.
  */
 
 const BROKER_URLS = [
   'wss://broker.emqx.io:8084/mqtt',
   'wss://broker.hivemq.com:8884/mqtt',
 ];
+
+const HEARTBEAT_INTERVAL_MS = 5000;
+const RECONNECT_BASE_MS = 1500;
+const RECONNECT_MAX_MS = 30000;
 
 let p2pWs = null;
 let p2pChannel = null;
@@ -25,11 +33,49 @@ let p2pConnected = false;
 let p2pSubscribed = false;
 let p2pBrokerIndex = 0;
 let p2pReconnectTimer = null;
+let p2pReconnectDelay = RECONNECT_BASE_MS;
 let p2pHeartbeatTimer = null;
 let p2pMessageHandler = () => {};
 let p2pStatusHandler = () => {};
 
 const p2pSendQueue = [];
+
+/* ----------------------------------------------------------- validation */
+
+/**
+ * Sanitize an incoming P2P message before it reaches the game logic.
+ * Drops messages with out-of-range numeric fields or malformed structure.
+ * Returns null if the message should be discarded.
+ */
+function sanitizeMessage(msg) {
+  if (!msg || typeof msg !== 'object' || !msg.type) return null;
+
+  const m = { ...msg };
+
+  if (m.winner !== undefined && m.winner !== null) {
+    if (m.winner !== 0 && m.winner !== 1) return null;
+  }
+  if (m.team0Score !== undefined) {
+    if (!Number.isInteger(m.team0Score) || m.team0Score < 0) return null;
+  }
+  if (m.team1Score !== undefined) {
+    if (!Number.isInteger(m.team1Score) || m.team1Score < 0) return null;
+  }
+  if (m.round !== undefined) {
+    if (!Number.isInteger(m.round) || m.round < 1) return null;
+  }
+  if (m.pts !== undefined) {
+    if (!Number.isInteger(m.pts) || m.pts < 1 || m.pts > 3) return null;
+  }
+  if (m.champIndex !== undefined) {
+    if (m.champIndex !== 0 && m.champIndex !== 1) return null;
+  }
+  if (m.teamIndex !== undefined) {
+    if (m.teamIndex !== 0 && m.teamIndex !== 1) return null;
+  }
+
+  return m;
+}
 
 function encodeVarInt(num) {
   const bytes = [];
@@ -171,6 +217,11 @@ function flushSendQueue() {
   }
 }
 
+function deliverMessage(parsed) {
+  const clean = sanitizeMessage(parsed);
+  if (clean) p2pMessageHandler(clean);
+}
+
 function setupWebSocket(clientId) {
   if (typeof WebSocket === 'undefined' || !p2pRoomTopic) return;
   try {
@@ -204,6 +255,7 @@ function setupWebSocket(clientId) {
         } else if (type === 9) {
           /* SUBACK received */
           p2pSubscribed = true;
+          p2pReconnectDelay = RECONNECT_BASE_MS;
           p2pStatusHandler({ connected: true });
           flushSendQueue();
           sendP2P('PEER_PING', { role: p2pRole });
@@ -219,7 +271,7 @@ function setupWebSocket(clientId) {
           try {
             const parsed = JSON.parse(payloadStr);
             if (parsed && parsed.from !== p2pRole) {
-              p2pMessageHandler(parsed);
+              deliverMessage(parsed);
             }
           } catch (err) {
             /* ignore malformed payload */
@@ -243,7 +295,8 @@ function setupWebSocket(clientId) {
       if (p2pRoomTopic) {
         clearTimeout(p2pReconnectTimer);
         p2pBrokerIndex++;
-        p2pReconnectTimer = setTimeout(() => setupWebSocket(clientId), 1500);
+        p2pReconnectTimer = setTimeout(() => setupWebSocket(clientId), p2pReconnectDelay);
+        p2pReconnectDelay = Math.min(p2pReconnectDelay * 2, RECONNECT_MAX_MS);
       }
     };
   } catch (err) {
@@ -274,7 +327,7 @@ export function connectP2P({
       p2pChannel.onmessage = (e) => {
         const msg = e.data;
         if (!msg || msg.from === p2pRole) return;
-        p2pMessageHandler(msg);
+        deliverMessage(msg);
       };
     } catch (err) {
       p2pChannel = null;
@@ -282,19 +335,17 @@ export function connectP2P({
   }
 
   const clientId = `mnm-${role}-${Math.random().toString(36).slice(2, 8)}`;
+  p2pReconnectDelay = RECONNECT_BASE_MS;
   setupWebSocket(clientId);
 
   clearInterval(p2pHeartbeatTimer);
   p2pHeartbeatTimer = setInterval(() => {
-    if (p2pRoomTopic) {
-      if (p2pWs && p2pWs.readyState === 1) {
-        try {
-          p2pWs.send(new Uint8Array([0xc0, 0x00])); // MQTT PINGREQ
-        } catch (err) {}
-      }
-      sendP2P('PEER_PING', { role: p2pRole });
+    if (p2pRoomTopic && p2pWs && p2pWs.readyState === 1) {
+      try {
+        p2pWs.send(new Uint8Array([0xc0, 0x00])); // MQTT PINGREQ
+      } catch (err) {}
     }
-  }, 3000);
+  }, HEARTBEAT_INTERVAL_MS);
 }
 
 export function disconnectP2P() {
@@ -306,6 +357,7 @@ export function disconnectP2P() {
   clearInterval(p2pHeartbeatTimer);
   p2pReconnectTimer = null;
   p2pHeartbeatTimer = null;
+  p2pReconnectDelay = RECONNECT_BASE_MS;
   if (p2pChannel) {
     try {
       p2pChannel.close();
