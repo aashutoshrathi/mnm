@@ -12,8 +12,8 @@
  *   5. Synchronized score, round transitions, team renames, and wrap-up.
  *
  * Messages are validated before delivery to the handler: numeric fields are
- * range-checked, and state-changing messages with a round field are rejected
- * if the round doesn't match the current game round on the receiving device.
+ * range-checked (winner, scores, round, pts, champIndex, teamIndex) and
+ * out-of-range values are silently dropped.
  */
 
 const BROKER_URLS = [
@@ -72,6 +72,16 @@ function sanitizeMessage(msg) {
   }
   if (m.teamIndex !== undefined) {
     if (m.teamIndex !== 0 && m.teamIndex !== 1) return null;
+  }
+  if (m.history !== undefined) {
+    if (!Array.isArray(m.history)) return null;
+    for (const h of m.history) {
+      if (!h || typeof h !== 'object') return null;
+      if (h.win !== null && h.win !== undefined && h.win !== 0 && h.win !== 1) return null;
+      if (h.p !== undefined && (!Number.isInteger(h.p) || h.p < 1 || h.p > 3)) return null;
+      if (h.w !== undefined && typeof h.w !== 'string') return null;
+      if (h.t !== undefined && typeof h.t !== 'string') return null;
+    }
   }
 
   return m;
@@ -340,10 +350,13 @@ export function connectP2P({
 
   clearInterval(p2pHeartbeatTimer);
   p2pHeartbeatTimer = setInterval(() => {
-    if (p2pRoomTopic && p2pWs && p2pWs.readyState === 1) {
-      try {
-        p2pWs.send(new Uint8Array([0xc0, 0x00])); // MQTT PINGREQ
-      } catch (err) {}
+    if (p2pRoomTopic) {
+      if (p2pWs && p2pWs.readyState === 1) {
+        try {
+          p2pWs.send(new Uint8Array([0xc0, 0x00])); // MQTT PINGREQ
+        } catch (err) {}
+      }
+      sendP2P('PEER_PING', { role: p2pRole });
     }
   }, HEARTBEAT_INTERVAL_MS);
 }

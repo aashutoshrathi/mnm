@@ -20,7 +20,9 @@ import { createStore, ADAPTERS } from './storage.js';
 import { webAdapter, sessionAdapter } from './storage-web.js';
 import {
   blip,
+  tock,
   buzz,
+  buzzer,
   victoryFanfare,
   settings,
   loadSettings,
@@ -29,6 +31,7 @@ import {
   hapticsSupported,
 } from './feedback.js';
 import { tallySVG } from './tally.js';
+import { renderShareCard, renderGalleryCard, exportCard, fontsReady } from './share.js';
 import { roundFor, syncCode, resetReplay } from './sync.js';
 import {
   newSeed,
@@ -56,17 +59,6 @@ import {
 } from './duo.js';
 import { burstConfetti, stopConfetti } from './confetti.js';
 import { connectP2P, disconnectP2P, sendP2P } from './p2p.js';
-import {
-  requestWakeLock,
-  releaseWakeLock,
-  paintClock,
-  runClock,
-  stopClock,
-  pauseClock,
-  resumeClock,
-  startRound,
-} from './clock.js';
-import { openShare, closeShare, updateShareCard } from './share-controller.js';
 
 /* ============================================================== constants */
 
@@ -281,6 +273,9 @@ function renderBoard(el) {
       }
       if (adjEl) {
         adjEl.classList.toggle('on', S.adjusting);
+        adjEl.querySelectorAll('button').forEach((b) => {
+          b.setAttribute('aria-label', `${Number(b.dataset.step) > 0 ? 'Add a point to' : 'Subtract a point from'} ${t.name}`);
+        });
       }
     });
   } else {
@@ -1217,6 +1212,160 @@ function dealSyncedRound() {
   }
 }
 
+/* =============================================================== wake lock */
+
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+    try {
+      if (!wakeLock) {
+        const lock = await navigator.wakeLock.request('screen');
+        wakeLock = lock;
+        lock.addEventListener('release', () => {
+          if (wakeLock === lock) {
+            wakeLock = null;
+          }
+        });
+      }
+    } catch (e) {
+      /* wake lock is best effort (e.g. low battery mode or background tab) */
+      wakeLock = null;
+    }
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    const lock = wakeLock;
+    wakeLock = null;
+    try {
+      lock.release().catch(() => {});
+    } catch (e) {
+      /* no-op */
+    }
+  }
+}
+
+/* ================================================================== clock */
+
+const formatClock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+function paintClock() {
+  const ms = Math.max(0, S.endsAt - Date.now());
+  const left = Math.ceil(ms / 1000);
+  const el = $('clock');
+  if (!el) return left;
+
+  el.textContent = formatClock(left);
+  el.className = 'clock' + (left <= 5 ? ' hot shake' : left <= 10 ? ' hot' : left <= 20 ? ' warn' : '');
+  const strokeEl = $('stroke');
+  if (strokeEl) {
+    strokeEl.style.transform = `scaleX(${ms / (S.len * 1000)})`;
+    strokeEl.style.background = left <= 10 ? '#FF4262' : left <= 20 ? '#FFD23F' : '#F7F4EC';
+  }
+
+  const padClock = $('pad-clock');
+  if (padClock) {
+    padClock.textContent = formatClock(left);
+    padClock.style.color =
+      left <= 10 ? '#FF4262' : left <= 20 ? '#FFD23F' : 'var(--paper)';
+  }
+
+  return left;
+}
+
+function runClock() {
+  clearInterval(S.ticker);
+  let nextTock = 0;
+  let high = true;
+  paintClock();
+  requestWakeLock();
+
+  S.ticker = setInterval(() => {
+    const left = paintClock();
+
+    let phase = null;
+    for (const p of TICK_PHASES) {
+      if (left <= p.from) phase = p;
+    }
+    if (phase && left > 0 && Date.now() >= nextTock) {
+      nextTock = Date.now() + phase.gap;
+      tock(high ? 2300 : 1700, phase.vol);
+      high = !high;
+      if (left <= 5) buzz(12);
+    }
+
+    if (left <= 0) {
+      stopClock();
+      buzzer();
+      if (isGuest()) {
+        $('res-eyebrow').textContent = `Round ${S.round}`;
+        $('verdict').textContent = 'Time expired';
+        $('verdict').style.color = 'rgba(247,244,236,.35)';
+        $('res-word').textContent = S.card?.word || '';
+        $('next').textContent = 'Waiting for host…';
+        $('next').disabled = true;
+        $('next').style.opacity = '0.6';
+        renderBoard($('board2'));
+        show('s-result');
+      } else {
+        finishRound(null);
+      }
+    }
+  }, 50);
+}
+
+function stopClock() {
+  clearInterval(S.ticker);
+  S.ticker = null;
+  S.pausedMs = null;
+  clearInterval(countdownTimer);
+  countdownTimer = null;
+  const overlay = $('countdown-overlay');
+  if (overlay) overlay.hidden = true;
+  releaseWakeLock();
+  closeDuoPad();
+}
+
+function pauseClock() {
+  if (!S.ticker) return;
+  clearInterval(S.ticker);
+  S.ticker = null;
+  S.pausedMs = Math.max(0, S.endsAt - Date.now());
+  releaseWakeLock();
+}
+
+function resumeClock() {
+  if (S.pausedMs === null) return;
+  S.endsAt = Date.now() + S.pausedMs;
+  S.pausedMs = null;
+  runClock();
+}
+
+function startRound(card) {
+  S.card = card;
+  {
+    resetDuoPad();
+  }
+  $('draw-theme').textContent = S.theme.any ? '🎯 Anything goes' : `${S.theme.icon} ${S.theme.name}`;
+  $('draw-worth').textContent = `Worth ${card.pts}`;
+  $('got0').textContent = `${S.teams[0].name} got it`;
+  $('got1').textContent = `${S.teams[1].name} got it`;
+
+  S.endsAt = Date.now() + S.len * 1000;
+  S.pausedMs = null;
+  show('s-draw');
+  runClock();
+
+  if (!isSynced()) {
+    openDuoPad({
+      colorMode: 'split',
+      team0Name: S.teams[0].name,
+      team1Name: S.teams[1].name,
+    });
+  }
+}
 
 function applyPeek() {
   const el = $('peek');
@@ -1360,7 +1509,7 @@ function renderLog() {
         <div class="logrow">
           <span class="lw">${esc(h.w)} <span class="dim">· ${esc(h.t)}</span></span>
           <span style="font-size:12px">${who}</span>
-          <span class="lp">${h.win === null ? '-' : '+' + h.p}</span>
+          <span class="lp">${h.win === null ? '-' : '+' + esc(h.p)}</span>
         </div>`;
     })
     .join('');
@@ -1655,6 +1804,55 @@ async function offerRejoin() {
     await enterGuestMode(last.code, payload, last.round);
   };
 }
+
+/* ================================================================== share */
+
+let activeShareTab = 'tally';
+
+async function updateShareCard() {
+  const shot = $('shot');
+  shot.innerHTML = '';
+  $('sh-hint').textContent = 'Rendering…';
+
+  await fontsReady();
+  const gameData = {
+    teams: S.teams.map((t, i) => ({ name: t.name, score: t.score, color: TEAM_HEX[i] })),
+    rounds: S.history.length,
+    wordsUsed: isSynced() ? S.history.length : S.used.size,
+    reason: S.endReason,
+    history: S.history,
+  };
+
+  const canvas = activeShareTab === 'gallery' ? renderGalleryCard(gameData) : renderShareCard(gameData);
+  shot.appendChild(canvas);
+  $('sh-hint').textContent = 'Long-press the image to save it, or use the button below.';
+
+  $('sh-share').onclick = async () => {
+    const filename = `marker-mayhem-${activeShareTab}-${Date.now()}.png`;
+    const result = await exportCard(canvas, filename);
+    if (result === 'shared') {
+      toast('Shared');
+    } else if (result === 'downloaded') {
+      toast('Image saved');
+    } else if (result !== 'cancelled') {
+      toast('Long-press the image to save it');
+    }
+  };
+}
+
+async function openShare() {
+  const modal = $('share-modal');
+  modal.classList.add('on');
+  activeShareTab = 'tally';
+  const tabTally = $('tab-tally');
+  const tabGallery = $('tab-gallery');
+  if (tabTally) tabTally.classList.add('is-active');
+  if (tabGallery) tabGallery.classList.remove('is-active');
+
+  await updateShareCard();
+}
+
+const closeShare = () => $('share-modal').classList.remove('on');
 
 /* =============================================================== settings */
 
