@@ -466,13 +466,6 @@ body:not(.mode-synced) #show-invite { display: none; }
   flex-wrap: wrap;
 }
 .pad-solo-top-controls[hidden] { display: none; }
-.pad-single-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.pad-single-controls[hidden] { display: none; }
 
 .padbar--bottom {
   padding-top: 6px;

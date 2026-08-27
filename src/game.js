@@ -53,6 +53,7 @@ import {
   getCurrentStrokes,
   renderIncomingStroke,
   renderIncomingBatch,
+  renderIncomingStrokeEnd,
   renderIncomingUndo,
   clearIncomingSideboard,
 } from './duo.js';
@@ -563,6 +564,7 @@ function triggerSynchronizedCountdown(onComplete) {
 
   clearInterval(countdownTimer);
   countdownTimer = setInterval(() => {
+    if (!countdownTimer) return;
     count--;
     if (count > 0) {
       num.textContent = count;
@@ -574,7 +576,9 @@ function triggerSynchronizedCountdown(onComplete) {
       clearInterval(countdownTimer);
       countdownTimer = null;
       overlay.hidden = true;
-      onComplete();
+      if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
+        onComplete();
+      }
     }
   }, 1000);
 }
@@ -816,6 +820,12 @@ function handleP2PMessage(msg) {
     case 'STROKES':
       if (msg.pts && Array.isArray(msg.pts)) {
         renderIncomingBatch(msg.from, msg.pts);
+      }
+      break;
+
+    case 'STROKE_END':
+      if (msg.stroke) {
+        renderIncomingStrokeEnd(msg.from, msg.stroke);
       }
       break;
 

@@ -95,10 +95,10 @@ function resolveStrokeSettings(team, y, height) {
   return { team: padColorMode, tool, width, color };
 }
 
-function padPos(e) {
+function padPos(e, rect = null) {
   if (!padCanvas) return { x: 0, y: 0 };
-  const rect = padCanvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const r = rect || padCanvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 
 function drawDivider(width, height) {
@@ -465,6 +465,17 @@ export function renderIncomingBatch(from, pts = []) {
     const width = item.w || 4;
     sideboardStroke(sa, sb, color, width, tool);
   }
+}
+
+export function renderIncomingStrokeEnd(from, stroke) {
+  if (from === padColorMode || !stroke || !stroke.id) return;
+  const existingIdx = opponentStrokeHistory.findIndex((s) => s.id === stroke.id);
+  if (existingIdx >= 0) {
+    opponentStrokeHistory[existingIdx] = stroke;
+  } else {
+    opponentStrokeHistory.push(stroke);
+  }
+  redrawSideboardCanvas();
 }
 
 /** Undo last stroke for Red in solo split mode */
@@ -843,29 +854,37 @@ export function wireDuoPad() {
         return;
       }
       e.preventDefault();
-      const p = padPos(e);
+      const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+      const subEvents = (coalesced && coalesced.length > 0) ? coalesced : [e];
       const rect = padCanvas.getBoundingClientRect();
-      padStroke(last, p, last.color, last.width, last.tool, last.strokeId);
 
-      if (rect.width > 0 && rect.height > 0) {
-        const aNorm = { x: last.x / rect.width, y: last.y / rect.height };
-        const bNorm = { x: p.x / rect.width, y: p.y / rect.height };
-        if (last.stroke) {
-          last.stroke.segments.push({ aNorm, bNorm });
+      for (const ev of subEvents) {
+        const p = padPos(ev, rect);
+        padStroke(last, p, last.color, last.width, last.tool, last.strokeId);
+
+        if (rect.width > 0 && rect.height > 0) {
+          const aNorm = { x: last.x / rect.width, y: last.y / rect.height };
+          const bNorm = { x: p.x / rect.width, y: p.y / rect.height };
+          if (last.stroke) {
+            last.stroke.segments.push({ aNorm, bNorm });
+          }
         }
-      }
 
-      last.x = p.x;
-      last.y = p.y;
+        last.x = p.x;
+        last.y = p.y;
+      }
     });
 
     const endPointer = (e) => {
       const last = padPointers.get(e.pointerId);
+      flushStrokeBatch();
       if (last && last.stroke && last.stroke.segments.length > 0) {
         strokeHistory.push(last.stroke);
+        if (padColorMode !== 'split' && typeof sendP2P === 'function') {
+          sendP2P('STROKE_END', { from: padColorMode, stroke: last.stroke });
+        }
       }
       padPointers.delete(e.pointerId);
-      flushStrokeBatch();
     };
 
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => {

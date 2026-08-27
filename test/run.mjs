@@ -485,6 +485,7 @@ test('duo drawing module exports expected interfaces', async () => {
   assert.equal(typeof duo.getPadSnapshot, 'function');
   assert.equal(typeof duo.getCurrentStrokes, 'function');
   assert.equal(typeof duo.renderIncomingBatch, 'function');
+  assert.equal(typeof duo.renderIncomingStrokeEnd, 'function');
   assert.equal(typeof duo.renderIncomingUndo, 'function');
   assert.equal(typeof duo.clearIncomingSideboard, 'function');
   assert.equal(typeof duo.duoPadIsOpen, 'function');

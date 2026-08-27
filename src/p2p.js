@@ -48,13 +48,19 @@ function decodeVarInt(buf, offset = 1) {
   let byteCount = 0;
   let digit = 0;
   do {
-    if (offset + byteCount >= buf.length) break;
+    if (offset + byteCount >= buf.length) {
+      return { value: 0, length: 0, valid: false };
+    }
     digit = buf[offset + byteCount];
     value += (digit & 127) * multiplier;
     multiplier *= 128;
     byteCount++;
   } while ((digit & 128) !== 0 && byteCount < 4);
-  return { value, length: byteCount };
+
+  if ((digit & 128) !== 0) {
+    return { value: 0, length: 0, valid: false };
+  }
+  return { value, length: byteCount, valid: true };
 }
 
 function encodeConnect(id) {
@@ -147,7 +153,7 @@ export function sendP2P(type, payload = {}) {
       /* network error ignored */
     }
   } else if (p2pRoomTopic) {
-    if (p2pSendQueue.length < 50) {
+    if (p2pSendQueue.length < 500) {
       p2pSendQueue.push(json);
     }
   }
@@ -178,32 +184,49 @@ function setupWebSocket(clientId) {
 
     p2pWs.onmessage = (e) => {
       const buf = new Uint8Array(e.data);
-      const type = buf[0] >> 4;
+      let pos = 0;
+      while (pos < buf.length) {
+        if (pos + 1 >= buf.length) break;
+        const header = buf[pos];
+        const type = header >> 4;
+        const dec = decodeVarInt(buf, pos + 1);
+        if (!dec.valid || dec.length === 0) break;
+        const remainingLength = dec.value;
+        const packetStart = pos;
+        const packetEnd = pos + 1 + dec.length + remainingLength;
 
-      if (type === 2) {
-        /* CONNACK received */
-        p2pConnected = true;
-        p2pWs.send(encodeSubscribe(p2pRoomTopic));
-      } else if (type === 9) {
-        /* SUBACK received */
-        p2pSubscribed = true;
-        p2pStatusHandler({ connected: true });
-        flushSendQueue();
-        sendP2P('PEER_PING', { role: p2pRole });
-      } else if (type === 3) {
-        /* PUBLISH received */
-        const dec = decodeVarInt(buf, 1);
-        let offset = 1 + dec.length;
-        const topicLen = (buf[offset] << 8) | buf[offset + 1];
-        offset += 2 + topicLen;
-        const payloadStr = new TextDecoder().decode(buf.subarray(offset));
-        try {
-          const parsed = JSON.parse(payloadStr);
-          if (!parsed || parsed.from === p2pRole) return;
-          p2pMessageHandler(parsed);
-        } catch (err) {
-          /* ignore malformed payload */
+        if (packetEnd > buf.length) break;
+
+        if (type === 2) {
+          /* CONNACK received */
+          p2pConnected = true;
+          p2pWs.send(encodeSubscribe(p2pRoomTopic));
+        } else if (type === 9) {
+          /* SUBACK received */
+          p2pSubscribed = true;
+          p2pStatusHandler({ connected: true });
+          flushSendQueue();
+          sendP2P('PEER_PING', { role: p2pRole });
+        } else if (type === 3) {
+          /* PUBLISH received */
+          const qos = (header & 0x06) >> 1;
+          let offset = packetStart + 1 + dec.length;
+          const topicLen = (buf[offset] << 8) | buf[offset + 1];
+          offset += 2 + topicLen;
+          if (qos > 0) offset += 2;
+          const payloadBytes = buf.subarray(offset, packetEnd);
+          const payloadStr = new TextDecoder().decode(payloadBytes);
+          try {
+            const parsed = JSON.parse(payloadStr);
+            if (parsed && parsed.from !== p2pRole) {
+              p2pMessageHandler(parsed);
+            }
+          } catch (err) {
+            /* ignore malformed payload */
+          }
         }
+
+        pos = packetEnd;
       }
     };
 
@@ -264,9 +287,14 @@ export function connectP2P({
   clearInterval(p2pHeartbeatTimer);
   p2pHeartbeatTimer = setInterval(() => {
     if (p2pRoomTopic) {
+      if (p2pWs && p2pWs.readyState === 1) {
+        try {
+          p2pWs.send(new Uint8Array([0xc0, 0x00])); // MQTT PINGREQ
+        } catch (err) {}
+      }
       sendP2P('PEER_PING', { role: p2pRole });
     }
-  }, 4000);
+  }, 3000);
 }
 
 export function disconnectP2P() {
