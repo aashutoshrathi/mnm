@@ -214,6 +214,25 @@ assert.equal(active(host), 's-result');
 assert.equal($(host, 'verdict').textContent, '+2');
 console.log('  [PASS] 13. Round 2 scored (+2 pts for Pixel Picassos; Score: 3 - 2)\n');
 
+// 13b. A stale DRAWER_READY must not drag the host back into a finished round.
+//
+// hostReadyState and guestReadyState both stay true from the moment a round
+// starts until the next toHandoff(), so a duplicate or relay-delayed
+// DRAWER_READY still satisfies `hostReady && guestReady` on the host - and
+// startHostSyncedRound()'s "is s-draw active" check does not catch it, because
+// by now the host is on s-result. This used to call show('s-draw') and yank the
+// host out of the result screen. It surfaced as an intermittent CI failure in
+// this very file ("'s-draw' !== 's-win'") that never reproduced locally, since
+// it needs the message to land after the round is scored.
+const roomCode = inviteUrl.slice(inviteUrl.indexOf('#join=') + 6).toUpperCase().replace(/[^0-9A-Z]/g, '');
+const staleChannel = new guest.window.BroadcastChannel(`mnm-room-${roomCode}`);
+staleChannel.postMessage({ type: 'DRAWER_READY', from: 'guest', role: 'guest', ready: true, round: 2 });
+await new Promise((r) => setTimeout(r, 150));
+staleChannel.close();
+
+assert.equal(active(host), 's-result', 'a stale DRAWER_READY must not restart a scored round');
+console.log('  [PASS] 13b. Stale ready message ignored: host stays on the result screen\n');
+
 /* -------------------------------------------------------------------------
  * ACT V: Round 3 - Deciding Match, Victory Podium & Confetti
  * ------------------------------------------------------------------------- */

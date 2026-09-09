@@ -22,6 +22,20 @@
 - Share-card tabs switch through `switchShareTab()` instead of an assignment
   across a module boundary.
 
+- **A late `DRAWER_READY` could drag the host back into a finished round.**
+  `hostReadyState` and `guestReadyState` both stay true from the moment a round
+  starts until the next `toHandoff()`, so a duplicate or relay-delayed ready
+  message still satisfied `hostReady && guestReady` after the round was scored —
+  and `startHostSyncedRound()`'s "is `s-draw` active" check did not catch it,
+  because by then the host had moved on to the result or victory screen. The
+  host was yanked out of the result screen back into a dead round.
+
+  It had been failing CI intermittently on `main` before this branch, as
+  `'s-draw' !== 's-win'` in `e2e-creative-match`, and never reproduced locally
+  because it needs the message to land after scoring. Rounds are now keyed by
+  `gameId:round` and started at most once; `e2e-creative-match` injects the
+  stale message directly and asserts the host stays put.
+
 ### Added
 
 - **Link previews.** `og.png`, a 1200×630 social card, plus a full Open Graph

@@ -580,10 +580,32 @@ let hostReadyState = false;
 let guestReadyState = false;
 let guestInLobby = false;
 
+/**
+ * The round this device has already launched, as `${gameId}:${round}`.
+ *
+ * Both ready flags stay true from the moment a round starts until the next
+ * toHandoff(), so a DRAWER_READY arriving late - a duplicate, or one the relay
+ * held onto - still satisfies `hostReady && guestReady` after the round has
+ * been scored. The screen check below does not catch it, because by then the
+ * host has moved on to the result or victory screen. Without this key, that
+ * stale message calls show('s-draw') and drags the host back into a round that
+ * is already over.
+ *
+ * Keyed by game id as well as round number so a rematch, which restarts at
+ * round 1 with a fresh id, is not mistaken for a replay of the old round 1.
+ */
+let startedRound = null;
+
 function startHostSyncedRound() {
   if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
     return;
   }
+
+  const key = `${S.id}:${S.round}`;
+  if (startedRound === key) {
+    return;
+  }
+  startedRound = key;
   if (!S.card) {
     const r = roundFor(S.seed, S.diff, S.round);
     S.theme = r.theme;
