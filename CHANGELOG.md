@@ -32,10 +32,25 @@
   in `startHostSyncedRound()` because `reveal` is a second, legitimate way into
   the same round and has to keep working.
 
-  Note: the two multi-device e2e suites are flaky on CI and were already failing
-  on `main` before this release (`e2e-twoplayer-fixes.mjs:102`,
-  `'s-guest' !== 's-win'`). That is unrelated to this change and is not fixed
-  here — see the PR for what was ruled out.
+- **Every cross-device message was acted on twice.** `p2p.js` sends on both
+  transports at once — BroadcastChannel for windows on the same device, a public
+  MQTT broker for everything else — and the receiver accepted from both. So each
+  message arrived once almost immediately and once after a network round trip.
+
+  Handlers that set absolute values survive that. The ones that move the host
+  between screens do not: a repeated `WORD_SELECTED` runs `toHandoff()` and
+  drags the host off a round in progress, and a repeated `DRAWER_READY` tries to
+  start a round that has already been scored. Since the delay on the second copy
+  belongs to a third party, this showed up only on CI — where it had been
+  failing on `main` before this release as `'s-guest' !== 's-win'` and
+  `'s-draw' !== 's-win'` — and never in a local run.
+
+  Sends now carry a sequence number and the receiver drops a `from:seq` it has
+  already handled. `test/e2e-p2p-dedupe.mjs` replays a duplicate directly rather
+  than waiting for one to be timed badly.
+
+- The test harness no longer hands jsdom a real `WebSocket`, so the suites talk
+  over BroadcastChannel only instead of reaching `broker.emqx.io` from CI.
 
 ### Added
 

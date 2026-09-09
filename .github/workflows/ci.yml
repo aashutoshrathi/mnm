@@ -77,6 +77,20 @@ jobs:
       # the module graph GitHub Pages actually serves, not the flattened bundle.
       - run: npm run test:esm
 
+  e2e-dedupe:
+    name: "E2E: duplicate p2p delivery"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/e2e-p2p-dedupe.mjs
+
   e2e-twoplayer:
     name: "E2E: two-player fixes"
     runs-on: ubuntu-latest

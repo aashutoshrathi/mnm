@@ -15,6 +15,37 @@ import { JSDOM } from 'jsdom';
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
+ * A WebSocket that never finishes connecting.
+ *
+ * p2p.js sends every message twice: instantly over BroadcastChannel, and again
+ * over a *public* MQTT broker when one is reachable. deliverMessage() does not
+ * dedupe, so with a relay connected each message is processed twice, the second
+ * copy arriving after a network round trip. A late duplicate WORD_SELECTED runs
+ * toHandoff() and bounces the host off the round; a late duplicate DRAWER_READY
+ * is the stale-ready race. How late that copy lands depends on a third party,
+ * which is why both multi-device suites failed only on CI and never in a local
+ * run - and why they were already failing on main.
+ *
+ * The harness used to hand these tests the real globalThis.WebSocket, so they
+ * genuinely reached broker.emqx.io. Both windows live in one process, so
+ * BroadcastChannel alone carries everything the tests need. Staying in
+ * CONNECTING keeps sendP2P on the BroadcastChannel path without provoking
+ * p2p.js's reconnect backoff.
+ */
+class OfflineWebSocket {
+  constructor() {
+    this.readyState = 0; // CONNECTING, forever
+    this.binaryType = 'arraybuffer';
+  }
+  send() {}
+  close() {
+    this.readyState = 3;
+  }
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+/**
  * Boot a JSDOM instance with the built bundle and browser-API shims.
  *
  * @param {Object} opts
@@ -87,7 +118,7 @@ export async function boot({ hash = '', url = 'https://example.test', mockCanvas
 
       window.scrollTo = () => {};
       window.BroadcastChannel = globalThis.BroadcastChannel;
-      window.WebSocket = globalThis.WebSocket;
+      window.WebSocket = OfflineWebSocket;
     },
   });
 
@@ -254,7 +285,7 @@ export async function bootModules({ hash = '', url = 'https://example.test' } = 
   window.HTMLCanvasElement.prototype.getContext = () => null;
   window.scrollTo = () => {};
   window.BroadcastChannel = globalThis.BroadcastChannel;
-  window.WebSocket = globalThis.WebSocket;
+  window.WebSocket = OfflineWebSocket;
 
   // The module graph runs in Node's realm, so the browser globals it expects
   // have to exist there. Saved and restored so tests stay isolated.
