@@ -22,38 +22,20 @@
 - Share-card tabs switch through `switchShareTab()` instead of an assignment
   across a module boundary.
 
-- **A late `DRAWER_READY` could drag the host back into a finished round.**
-  `hostReadyState` and `guestReadyState` both stay true from the moment a round
-  starts until the next `toHandoff()`, so a duplicate or relay-delayed ready
-  message still satisfied `hostReady && guestReady` after the round was scored —
-  and `startHostSyncedRound()`'s "is `s-draw` active" check did not catch it,
-  because by then the host had moved on to the result or victory screen. The
-  host was yanked out of the result screen back into a dead round.
+- **A stale `DRAWER_READY` could drag the host back into a finished round.**
+  Both ready flags stay true from when a round starts until the next
+  `toHandoff()`, so a duplicate or relay-delayed ready message still satisfied
+  `hostReady && guestReady` after the round was scored — and the "is `s-draw`
+  active" check did not catch it, because by then the host was on the result or
+  victory screen. A ready handshake now starts a round only while the host is on
+  the handoff screen. The check lives in the `DRAWER_READY` handler rather than
+  in `startHostSyncedRound()` because `reveal` is a second, legitimate way into
+  the same round and has to keep working.
 
-  It had been failing CI intermittently on `main` before this branch, as
-  `'s-draw' !== 's-win'` in `e2e-creative-match`, and never reproduced locally
-  because it needs the message to land after scoring.
-
-  A ready handshake now starts a round only while the host is actually on the
-  handoff screen. The check lives in the `DRAWER_READY` handler rather than in
-  `startHostSyncedRound()` on purpose: the `reveal` button is a second,
-  legitimate way into the same round, and it has to keep working when a repeated
-  `WORD_SELECTED` bounces the host back to handoff. `e2e-creative-match` injects
-  the stale ready message directly and asserts the host stays on the result
-  screen.
-
-- **Both multi-device e2e suites were flaky on CI, on `main`, before this
-  branch.** They asserted cross-device state behind a fixed `setTimeout(100)`,
-  which asserts a latency budget rather than a behaviour: on a loaded runner the
-  BroadcastChannel message lands at 120ms and a test that only ever meant "the
-  guest follows the host" fails. `e2e-twoplayer-fixes.mjs:102` failed as
-  `'s-guest' !== 's-win'` on `main` and again here.
-
-  Cross-device assertions now poll for the condition instead — `expectScreen`,
-  `expectText`, `expectMatch`, `expectSynced` in `test/helpers.mjs`. The happy
-  path is no slower, since a condition that is already true returns on the first
-  check. Verified by delaying `END_GAME` delivery to 400ms, four times the old
-  deadline: both suites pass.
+  Note: the two multi-device e2e suites are flaky on CI and were already failing
+  on `main` before this release (`e2e-twoplayer-fixes.mjs:102`,
+  `'s-guest' !== 's-win'`). That is unrelated to this change and is not fixed
+  here — see the PR for what was ruled out.
 
 ### Added
 

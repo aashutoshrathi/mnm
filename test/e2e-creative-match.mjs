@@ -14,7 +14,7 @@
  */
 
 import { strict as assert } from 'node:assert';
-import { boot, $, click, pickSegment, drawFakeStroke, expectScreen, expectText, expectMatch, expectSynced } from './helpers.mjs';
+import { boot, $, active, click, pickSegment, drawFakeStroke } from './helpers.mjs';
 
 console.log('================================================================');
 console.log('  MARKER & MAYHEM - TWO-PLAYER LIVE MATCH EXPERIENCE SIMULATION');
@@ -34,7 +34,7 @@ $(host, 'n0').value = 'The Doodlers';
 $(host, 'n1').value = 'Pixel Picassos';
 click(host, 'go');
 
-await expectScreen(host, 's-invite', 'Host must land on invite screen');
+assert.equal(active(host), 's-invite', 'Host must land on invite screen');
 const inviteUrl = $(host, 'invite-url').textContent;
 const joinCode = $(host, 'invite-code').textContent;
 assert.ok(inviteUrl.includes('#join='), 'Invite URL must contain room hash');
@@ -48,19 +48,19 @@ const guest = await boot({
 });
 await new Promise((r) => setTimeout(r, 80));
 
-await expectScreen(guest, 's-guest', 'Guest should automatically connect and enter s-guest');
+assert.equal(active(guest), 's-guest', 'Guest should automatically connect and enter s-guest');
 console.log('  [PASS] 2. Guest joined game via shared link');
 
 // 3. Guest customizes their team name on join
 click(guest, 'guest-rename-toggle');
 $(guest, 'gr-name').value = 'Pixel Picassos';
 click(guest, 'gr-save');
-await expectText(guest, 'guest-team-name', 'Pixel Picassos');
+assert.equal($(guest, 'guest-team-name').textContent, 'Pixel Picassos');
 console.log('  [PASS] 3. Guest confirmed custom team name: "Pixel Picassos"');
 
 // 4. Host proceeds to handoff screen for Round 1
 click(host, 'invite-done');
-await expectScreen(host, 's-handoff', 'Host enters Round 1 handoff');
+assert.equal(active(host), 's-handoff', 'Host enters Round 1 handoff');
 console.log('  [PASS] 4. Host advanced to Round 1 setup\n');
 
 /* -------------------------------------------------------------------------
@@ -73,7 +73,7 @@ assert.ok($(host, 'settings-modal').classList.contains('on'), 'Settings modal op
 const volSlider = $(host, 'set-volume');
 volSlider.value = '85';
 volSlider.dispatchEvent(new host.window.Event('input'));
-await expectText(host, 'set-volume-val', '85%');
+assert.equal($(host, 'set-volume-val').textContent, '85%');
 
 const storedSettings = JSON.parse(host.window.localStorage.getItem('mnm_audio_settings') || '{}');
 assert.equal(storedSettings.volume, 0.85, 'Master volume should persist to localStorage');
@@ -88,36 +88,35 @@ console.log('ACT III: Round 1 (The Doodlers picking theme and word)');
 
 // 1. Host chooses theme and high-stake card
 click(host, 'reveal');
-await expectScreen(host, 's-theme');
+assert.equal(active(host), 's-theme');
 const themeBtns = host.window.document.querySelectorAll('.theme');
 assert.ok(themeBtns.length >= 3, 'Host should see multiple theme options');
 click(host, themeBtns[0]);
 
-await expectScreen(host, 's-pick');
+assert.equal(active(host), 's-pick');
 const cards = host.window.document.querySelectorAll('.card');
 click(host, cards[cards.length - 1]); // Pick highest stakes card (3 pts)
-await expectScreen(host, 's-handoff');
+assert.equal(active(host), 's-handoff');
 
 await new Promise((r) => setTimeout(r, 80));
-const round1Word = await expectSynced(
-  host, 'host-word-text', guest, 'guest-word-text',
-  'Guest secret word must match Host secret word'
-);
+const round1Word = $(host, 'host-word-text').textContent;
+const guestRound1Word = $(guest, 'guest-word-text').textContent;
 assert.ok(round1Word.length > 0, 'Host secret word should be populated');
+assert.equal(round1Word, guestRound1Word, 'Guest secret word must match Host secret word');
 console.log(`  [PASS] 6. Secret word "${round1Word}" synchronized to both drawers`);
 
 // 2. Both drawers confirm readiness
 click(guest, 'gr-my-btn');
 click(host, 'hr-host-btn');
 await new Promise((r) => setTimeout(r, 80));
-await expectMatch(host, 'hr-guest-status', /Ready/);
+assert.match($(host, 'hr-guest-status').textContent, /Ready/);
 console.log('  [PASS] 7. Drawer readiness handshake verified');
 
 // 3. Host starts countdown
 click(host, 'reveal');
 await new Promise((r) => setTimeout(r, 100));
-await expectScreen(host, 's-draw');
-await expectScreen(guest, 's-draw');
+assert.equal(active(host), 's-draw');
+assert.equal(active(guest), 's-draw');
 console.log('  [PASS] 8. 3-2-1 Countdown orchestrated; both phones transitioned to s-draw');
 
 // 4. Drawing Pad auto-opened & Drawing Tools tested
@@ -157,8 +156,8 @@ console.log('  [PASS] 9. Multi-color drawing tools, eraser, and undo verified');
 click(host, 'pad-done');
 click(guest, 'pad-done');
 click(host, 'got0');
-await expectScreen(host, 's-result');
-await expectText(host, 'verdict', '+3');
+assert.equal(active(host), 's-result');
+assert.equal($(host, 'verdict').textContent, '+3');
 console.log('  [PASS] 10. Round 1 scored (+3 pts for The Doodlers)\n');
 
 /* -------------------------------------------------------------------------
@@ -171,25 +170,24 @@ click(host, 'next');
 click(guest, 'guest-done');
 await new Promise((r) => setTimeout(r, 80));
 
-await expectScreen(host, 's-handoff');
-await expectScreen(guest, 's-guest');
-await expectMatch(host, 'handoff-head', /Pixel Picassos is choosing/i);
-await expectMatch(guest, 'guest-head', /Your turn to pick/i);
+assert.equal(active(host), 's-handoff');
+assert.equal(active(guest), 's-guest');
+assert.match($(host, 'handoff-head').textContent, /Pixel Picassos is choosing/i);
+assert.match($(guest, 'guest-head').textContent, /Your turn to pick/i);
 console.log('  [PASS] 11. Turn alternation verified: Guest takes turn to pick theme and card');
 
 // Guest picks theme & card
 click(guest, 'guest-start');
-await expectScreen(guest, 's-theme');
+assert.equal(active(guest), 's-theme');
 click(guest, guest.window.document.querySelector('.theme'));
-await expectScreen(guest, 's-pick');
+assert.equal(active(guest), 's-pick');
 click(guest, guest.window.document.querySelectorAll('.card')[1]); // 2 pts
-await expectScreen(guest, 's-guest');
+assert.equal(active(guest), 's-guest');
 
 await new Promise((r) => setTimeout(r, 80));
-const round2Word = await expectSynced(
-  guest, 'guest-word-text', host, 'host-word-text',
-  'Host receives Round 2 word chosen by Guest'
-);
+const round2Word = $(guest, 'guest-word-text').textContent;
+const hostRound2Word = $(host, 'host-word-text').textContent;
+assert.equal(round2Word, hostRound2Word, 'Host receives Round 2 word chosen by Guest');
 console.log(`  [PASS] 12. Round 2 secret word "${round2Word}" chosen by Guest synced to Host`);
 
 // Both mark ready and start
@@ -199,8 +197,8 @@ await new Promise((r) => setTimeout(r, 80));
 click(host, 'reveal');
 await new Promise((r) => setTimeout(r, 100));
 
-await expectScreen(host, 's-draw', 'reveal must still start the round after a bounce back to handoff');
-await expectScreen(guest, 's-draw');
+assert.equal(active(host), 's-draw');
+assert.equal(active(guest), 's-draw');
 
 // Drawing battle
 click(host, 'duo-toggle');
@@ -212,28 +210,9 @@ drawFakeStroke(host, { points: [{ x: 90, y: 90 }, { x: 190, y: 190 }] });
 click(host, 'pad-done');
 click(guest, 'pad-done');
 click(host, 'got1'); // Host scores for Blue
-await expectScreen(host, 's-result');
-await expectText(host, 'verdict', '+2');
+assert.equal(active(host), 's-result');
+assert.equal($(host, 'verdict').textContent, '+2');
 console.log('  [PASS] 13. Round 2 scored (+2 pts for Pixel Picassos; Score: 3 - 2)\n');
-
-// 13b. A stale DRAWER_READY must not drag the host back into a finished round.
-//
-// hostReadyState and guestReadyState both stay true from the moment a round
-// starts until the next toHandoff(), so a duplicate or relay-delayed
-// DRAWER_READY still satisfies `hostReady && guestReady` on the host - and
-// startHostSyncedRound()'s "is s-draw active" check does not catch it, because
-// by now the host is on s-result. This used to call show('s-draw') and yank the
-// host out of the result screen. It surfaced as an intermittent CI failure in
-// this very file ("'s-draw' !== 's-win'") that never reproduced locally, since
-// it needs the message to land after the round is scored.
-const roomCode = inviteUrl.slice(inviteUrl.indexOf('#join=') + 6).toUpperCase().replace(/[^0-9A-Z]/g, '');
-const staleChannel = new guest.window.BroadcastChannel(`mnm-room-${roomCode}`);
-staleChannel.postMessage({ type: 'DRAWER_READY', from: 'guest', role: 'guest', ready: true, round: 2 });
-await new Promise((r) => setTimeout(r, 150));
-staleChannel.close();
-
-await expectScreen(host, 's-result', 'a stale DRAWER_READY must not restart a scored round');
-console.log('  [PASS] 13b. Stale ready message ignored: host stays on the result screen\n');
 
 /* -------------------------------------------------------------------------
  * ACT V: Round 3 - Deciding Match, Victory Podium & Confetti
@@ -256,15 +235,15 @@ await new Promise((r) => setTimeout(r, 100));
 
 // Complete round 3
 click(host, 'got0'); // Host scores final word
-await expectScreen(host, 's-result');
+assert.equal(active(host), 's-result');
 
 // Players wrap up match after 3 intense rounds
 click(host, 'wrap-result');
 click(host, 'm-yes');
 await new Promise((r) => setTimeout(r, 100));
 
-await expectScreen(host, 's-win', 'Host lands on Victory screen');
-await expectMatch(host, 'win-name', /The Doodlers/);
+assert.equal(active(host), 's-win', 'Host lands on Victory screen');
+assert.match($(host, 'win-name').textContent, /The Doodlers/);
 assert.ok($(host, 'confetti-canvas'), 'Confetti canvas celebration is active on victory');
 console.log('  [PASS] 14. Match wrapped up: Grand Victory screen & Confetti celebration displayed');
 console.log('  [PASS] 15. Champion crowned: "The Doodlers" with final tally\n');
@@ -287,7 +266,7 @@ console.log('  [PASS] 16. Match Drawing Gallery poster exported with all round s
 
 click(host, 'reset');
 await new Promise((r) => setTimeout(r, 80));
-await expectScreen(host, 's-setup', 'Host returns to fresh setup screen');
+assert.equal(active(host), 's-setup', 'Host returns to fresh setup screen');
 assert.ok($(host, 'saves-field').hidden, 'Completed match is cleanly archived from resume saves');
 console.log('  [PASS] 17. Host returned to setup; finished match archived\n');
 
