@@ -46,11 +46,38 @@ export function saveSettings() {
 // Initial load
 loadSettings();
 
+/* -------------------------------------------------------- user gesture -- */
+
+/**
+ * Whether the user has actually interacted with the page yet.
+ *
+ * Browsers refuse both of the things this module does until they have: an
+ * AudioContext created or resumed beforehand logs "The AudioContext was not
+ * allowed to start", and navigator.vibrate logs "Blocked call to
+ * navigator.vibrate because user hasn't tapped on the frame". Neither throws,
+ * so try/catch cannot quiet them - the browser writes them itself. The only fix
+ * is not to call them yet.
+ *
+ * Nothing is lost by waiting. Sound and haptics exist to answer a tap, so there
+ * is nothing worth playing before the first one.
+ */
+let userGestured = false;
+
+if (typeof window !== 'undefined' && window.addEventListener) {
+  const markGesture = () => {
+    userGestured = true;
+  };
+  for (const type of ['pointerdown', 'touchstart', 'mousedown', 'keydown']) {
+    window.addEventListener(type, markGesture, { capture: true, once: true, passive: true });
+  }
+}
+
 /* ---------------------------------------------------------------- audio -- */
 
 let ac = null;
 
 function ctx() {
+  if (!userGestured) return null;
   if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
   if (ac.state === 'suspended') ac.resume();
   return ac;
@@ -61,6 +88,7 @@ export function blip(freq, dur = 0.08, vol = 0.05) {
   if (!settings.sound) return;
   try {
     const c = ctx();
+    if (!c) return;
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'square';
@@ -82,6 +110,7 @@ export function tock(freq, vol = 0.06) {
   if (!settings.sound) return;
   try {
     const c = ctx();
+    if (!c) return;
     const t = c.currentTime;
     const o = c.createOscillator();
     const g = c.createGain();
@@ -106,6 +135,7 @@ export function buzzer() {
   if (!settings.sound || !settings.buzzer) return;
   try {
     const c = ctx();
+    if (!c) return;
     const t = c.currentTime;
     const o = c.createOscillator();
     const g = c.createGain();
@@ -128,6 +158,7 @@ export function victoryFanfare() {
   if (!settings.sound || !settings.fanfare) return;
   try {
     const c = ctx();
+    if (!c) return;
     const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
     notes.forEach((freq, idx) => {
       const t = c.currentTime + idx * 0.11;
@@ -150,7 +181,7 @@ export function victoryFanfare() {
 /* -------------------------------------------------------------- haptics -- */
 
 export function buzz(pattern) {
-  if (!settings.haptics) return;
+  if (!settings.haptics || !userGestured) return;
   if (typeof navigator === 'undefined' || !navigator.vibrate) return;
   try {
     navigator.vibrate(pattern);

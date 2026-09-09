@@ -21,6 +21,7 @@
     "lint": "eslint src/ test/ build.mjs",
     "format": "prettier --write src/ test/ build.mjs *.json",
     "og": "node tools/make-og.mjs",
+    "sweep": "node tools/console-sweep.mjs",
     "start": "node build.mjs && python3 -m http.server 8080"
   },
   "devDependencies": {

@@ -449,6 +449,76 @@ test('SVG output is well-formed and sized correctly', () => {
 
 group('feedback and audio');
 
+/**
+ * Gesture gating has to be probed before the assertions, because this runner
+ * calls tests synchronously and never awaits them - an async test body would
+ * race the next test's globals. So the work happens here at module scope, and
+ * the test below just checks what was recorded.
+ */
+const gestureProbe = await (async () => {
+  const calls = [];
+  const listeners = {};
+  const priorWindow = globalThis.window;
+  const priorNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+
+  globalThis.window = {
+    addEventListener(type, fn) {
+      listeners[type] = fn;
+    },
+    AudioContext: class {
+      constructor() {
+        calls.push('AudioContext');
+        this.state = 'running';
+        this.currentTime = 0;
+        this.destination = {};
+      }
+      createOscillator() {
+        return {
+          frequency: { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
+          connect() {}, start() {}, stop() {},
+        };
+      }
+      createGain() {
+        return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} };
+      }
+    },
+  };
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { vibrate: () => calls.push('vibrate') },
+    configurable: true,
+  });
+
+  const fb = await import('../src/feedback.js?gesture-gate');
+  fb.settings.sound = true;
+  fb.settings.haptics = true;
+
+  fb.blip(440);
+  fb.buzz(50);
+  const beforeGesture = [...calls];
+
+  listeners.pointerdown();
+  fb.blip(440);
+  fb.buzz(50);
+  const afterGesture = [...calls];
+
+  if (priorWindow === undefined) delete globalThis.window;
+  else globalThis.window = priorWindow;
+  if (priorNavigator) Object.defineProperty(globalThis, 'navigator', priorNavigator);
+
+  return { beforeGesture, afterGesture, listeners: Object.keys(listeners) };
+})();
+
+test('audio and haptics stay silent until the user has interacted', () => {
+  // Browsers log "The AudioContext was not allowed to start" and "Blocked call
+  // to navigator.vibrate" when either is used before a gesture. They write those
+  // themselves rather than throwing, so try/catch cannot quiet them - the calls
+  // simply must not happen yet.
+  assert.deepEqual(gestureProbe.beforeGesture, [], 'nothing may fire before the first user gesture');
+  assert.ok(gestureProbe.afterGesture.includes('AudioContext'), 'audio should work once the user has tapped');
+  assert.ok(gestureProbe.afterGesture.includes('vibrate'), 'haptics should work once the user has tapped');
+  assert.ok(gestureProbe.listeners.includes('pointerdown'), 'should listen for a pointer gesture');
+});
+
 test('audio and buzzer functions execute safely without AudioContext', async () => {
   const { buzzer, victoryFanfare, blip, tock, buzz, settings } = await import('../src/feedback.js');
   assert.doesNotThrow(() => buzzer());
