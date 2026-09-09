@@ -197,7 +197,7 @@ await new Promise((r) => setTimeout(r, 80));
 click(host, 'reveal');
 await new Promise((r) => setTimeout(r, 100));
 
-assert.equal(active(host), 's-draw');
+assert.equal(active(host), 's-draw', 'reveal must still start the round after a bounce back to handoff');
 assert.equal(active(guest), 's-draw');
 
 // Drawing battle

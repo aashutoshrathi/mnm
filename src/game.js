@@ -580,32 +580,10 @@ let hostReadyState = false;
 let guestReadyState = false;
 let guestInLobby = false;
 
-/**
- * The round this device has already launched, as `${gameId}:${round}`.
- *
- * Both ready flags stay true from the moment a round starts until the next
- * toHandoff(), so a DRAWER_READY arriving late - a duplicate, or one the relay
- * held onto - still satisfies `hostReady && guestReady` after the round has
- * been scored. The screen check below does not catch it, because by then the
- * host has moved on to the result or victory screen. Without this key, that
- * stale message calls show('s-draw') and drags the host back into a round that
- * is already over.
- *
- * Keyed by game id as well as round number so a rematch, which restarts at
- * round 1 with a fresh id, is not mistaken for a replay of the old round 1.
- */
-let startedRound = null;
-
 function startHostSyncedRound() {
   if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
     return;
   }
-
-  const key = `${S.id}:${S.round}`;
-  if (startedRound === key) {
-    return;
-  }
-  startedRound = key;
   if (!S.card) {
     const r = roundFor(S.seed, S.diff, S.round);
     S.theme = r.theme;
@@ -752,7 +730,19 @@ function handleP2PMessage(msg) {
           statusEl.textContent = guestReadyState ? '✓ Ready' : 'Waiting for drawer…';
           statusEl.className = guestReadyState ? 'ready-status ready' : 'ready-status waiting';
         }
-        if (hostReadyState && guestReadyState) {
+        // Only a handshake completed *on the handoff screen* starts a round.
+        //
+        // Both ready flags stay true from the moment a round starts until the
+        // next toHandoff(), so a duplicate or relay-delayed DRAWER_READY still
+        // satisfies this condition after the round has been scored. Without the
+        // screen check it called show('s-draw') and pulled the host out of the
+        // result or victory screen back into a round that was already over.
+        //
+        // Deliberately checked here rather than inside startHostSyncedRound():
+        // the 'reveal' button is a second, legitimate way into the same round,
+        // and it has to keep working when the host lands back on handoff.
+        const onHandoff = $('s-handoff') && $('s-handoff').classList.contains('is-active');
+        if (hostReadyState && guestReadyState && onHandoff) {
           startHostSyncedRound();
         }
       } else if (isGuest() && msg.role === 'host') {

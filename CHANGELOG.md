@@ -32,9 +32,15 @@
 
   It had been failing CI intermittently on `main` before this branch, as
   `'s-draw' !== 's-win'` in `e2e-creative-match`, and never reproduced locally
-  because it needs the message to land after scoring. Rounds are now keyed by
-  `gameId:round` and started at most once; `e2e-creative-match` injects the
-  stale message directly and asserts the host stays put.
+  because it needs the message to land after scoring.
+
+  A ready handshake now starts a round only while the host is actually on the
+  handoff screen. The check lives in the `DRAWER_READY` handler rather than in
+  `startHostSyncedRound()` on purpose: the `reveal` button is a second,
+  legitimate way into the same round, and it has to keep working when a repeated
+  `WORD_SELECTED` bounces the host back to handoff. `e2e-creative-match` injects
+  the stale ready message directly and asserts the host stays on the result
+  screen.
 
 ### Added
 
