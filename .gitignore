@@ -4,4 +4,3 @@ dist/
 *.log
 .vscode/
 .idea/
-sw.js

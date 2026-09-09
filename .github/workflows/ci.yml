@@ -145,3 +145,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # sw.js is generated but committed, because Pages serves the repo root
+      # with no build step. If it drifts, the deployed worker caches a stale
+      # SHELL under a stale version, which is how it silently rots.
+      - name: sw.js must be committed and current
+        run: |
+          git diff --exit-code sw.js || {
+            echo "::error::sw.js is out of date - run 'npm run build' and commit it"
+            exit 1
+          }
