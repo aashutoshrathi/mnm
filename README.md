@@ -15,6 +15,7 @@ npm run test:meta # link-preview tags vs. the images they promise
 npm run test:all  # everything above, plus the multi-device e2e suites
 npm run build     # bundle everything into dist/index.html
 npm run og        # regenerate og.png and apple-touch-icon.png
+npm run sweep     # walk every screen in real Chrome, fail on console noise
 npm start         # build + serve on http://localhost:8080
 ```
 
@@ -207,6 +208,7 @@ apple-touch-icon.png    180x180 raster icon (generated)
 tools/
   og-image.html         draws both of the above on a canvas
   make-og.mjs           serves that page and writes what it posts back
+  console-sweep.mjs     drives headless Chrome and fails on console noise
 src/
   game.js               state machine, screens, wiring (solo | host | guest)
   duo.js                drawing surface: single-team canvas + real-time sideboard
