@@ -111,6 +111,7 @@ const SHELL = [
   './index.html',
   './manifest.webmanifest',
   './icon.svg',
+  './apple-touch-icon.png',
   './src/styles.css',
   './src/game.js',
   './src/rng.js',
@@ -223,6 +224,9 @@ async function build() {
     .replace(/^\s*<link rel="preconnect"[^>]*>\n/gm, '')
     .replace(/^\s*<link rel="stylesheet" href="https:\/\/fonts[^>]*>\n/gm, '')
     .replace(/^\s*<link rel="manifest"[^>]*>\n/gm, '')
+    // Relative, so it would 404 from a file:// copy. The og:* tags stay: they
+    // carry absolute URLs and still preview correctly wherever this is hosted.
+    .replace(/^\s*<link rel="apple-touch-icon"[^>]*>\n/gm, '')
     .replace(
       /^\s*<link rel="stylesheet" href="src\/styles\.css">\n/gm,
       `<style>\n${fontImport}\n\n${css}</style>\n`

@@ -179,3 +179,115 @@ export function createRunner() {
 
   return { test, group, report, get passed() { return passed; }, get failed() { return failed; } };
 }
+
+/* ==================================================== ES-module boot harness */
+
+/**
+ * Boot the app the way a browser actually does: `index.html` plus the real
+ * `src/*.js` module graph, each file in its own scope.
+ *
+ * `boot()` above loads `dist/index.html`, where the bundler has flattened every
+ * module into one IIFE. That flat scope hides a whole class of bug - a module
+ * reading a name that lives in a *different* module still resolves, so the
+ * bundle runs while the served site throws ReferenceError. Exactly that shipped
+ * once: clock.js used game.js's `S` without importing it, and selecting a word
+ * died on the real site while all 90-odd tests stayed green.
+ *
+ * So this harness deliberately does not use the bundle. jsdom cannot execute
+ * `<script type="module">` itself, so we build the DOM with scripts disabled,
+ * publish jsdom's browser globals onto Node's globalThis, and let Node's own
+ * ESM loader import the graph - which enforces real module boundaries.
+ *
+ * **Once per process.** Node's ESM cache is keyed by specifier, and the graph is
+ * circular (game.js <-> clock.js), so a second boot cannot get a fresh copy:
+ * cache-busting the entry alone hands clock.js the *old* game.js and the two
+ * silently stop sharing state. A test file using this walks one continuous
+ * session instead, which is how the other e2e files are written anyway.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.hash] - URL hash to simulate (e.g. invite link)
+ * @param {string} [opts.url] - base URL origin
+ * @returns {Promise<{dom: JSDOM, restore: () => void}>}
+ */
+let modulesBooted = false;
+
+export async function bootModules({ hash = '', url = 'https://example.test' } = {}) {
+  assert.ok(
+    !modulesBooted,
+    'bootModules() is once-per-process: the ESM cache would hand the second boot ' +
+      'a half-fresh module graph. Drive one session, or use a separate test file.'
+  );
+  modulesBooted = true;
+
+  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const dom = new JSDOM(html, {
+    runScripts: 'outside-only',
+    url: `${url}/${hash}`,
+    pretendToBeVisual: true,
+  });
+
+  const { window } = dom;
+
+  window.AudioContext = class {
+    constructor() {
+      this.state = 'running';
+      this.currentTime = 0;
+      this.destination = {};
+    }
+    resume() {}
+    createOscillator() {
+      return {
+        frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+        connect() {},
+        start() {},
+        stop() {},
+      };
+    }
+    createGain() {
+      return {
+        gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+        connect() {},
+      };
+    }
+  };
+  window.navigator.vibrate = () => true;
+  window.HTMLCanvasElement.prototype.getContext = () => null;
+  window.scrollTo = () => {};
+  window.BroadcastChannel = globalThis.BroadcastChannel;
+  window.WebSocket = globalThis.WebSocket;
+
+  // The module graph runs in Node's realm, so the browser globals it expects
+  // have to exist there. Saved and restored so tests stay isolated.
+  const saved = new Map();
+  const publish = (name, value) => {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { value, writable: true, configurable: true });
+  };
+
+  for (const name of [
+    'window', 'document', 'navigator', 'location', 'history', 'localStorage',
+    'sessionStorage', 'AudioContext', 'HTMLCanvasElement', 'HTMLElement',
+    'MouseEvent', 'PointerEvent', 'CustomEvent', 'Event', 'Blob', 'Image',
+    'matchMedia', 'getComputedStyle', 'requestAnimationFrame',
+    'cancelAnimationFrame', 'scrollTo', 'alert', 'confirm', 'prompt',
+    'addEventListener', 'removeEventListener', 'dispatchEvent',
+  ]) {
+    if (name in window) {
+      const v = window[name];
+      publish(name, typeof v === 'function' && !v.prototype ? v.bind(window) : v);
+    }
+  }
+
+  await import('../src/game.js');
+  await new Promise((r) => setTimeout(r, 60));
+
+  const restore = () => {
+    for (const [name, desc] of saved) {
+      if (desc) Object.defineProperty(globalThis, name, desc);
+      else delete globalThis[name];
+    }
+    window.close();
+  };
+
+  return { dom, restore };
+}

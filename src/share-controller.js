@@ -1,11 +1,18 @@
 /**
  * share-controller.js - the share-card modal, tab switching, and export.
  *
- * Extracted from game.js for focus. The build flattens this into the same
- * IIFE scope as game.js, so it shares the flat namespace at runtime.
+ * Extracted from game.js for focus. The import from game.js is circular, which
+ * is safe here for the same reason it is in clock.js: nothing below runs until
+ * the user opens the share modal, long after both modules have evaluated.
+ *
+ * `activeShareTab` stays private to this module. game.js used to assign it
+ * directly, which only worked because the bundle flattened both files into one
+ * scope - an imported binding is read-only, so the served ES-module build threw
+ * on the write. switchShareTab() owns the whole transition instead.
  */
 
 import { renderShareCard, renderGalleryCard, exportCard, fontsReady } from './share.js';
+import { $, S, TEAM_HEX, isSynced, toast } from './game.js';
 
 let activeShareTab = 'tally';
 
@@ -54,4 +61,17 @@ async function openShare() {
 
 const closeShare = () => $('share-modal').classList.remove('on');
 
-export { activeShareTab, updateShareCard, openShare, closeShare };
+/** Swap the share modal between the tally card and the gallery card. */
+function switchShareTab(tab) {
+  if (activeShareTab === tab) return;
+  activeShareTab = tab;
+
+  const tabTally = $('tab-tally');
+  const tabGallery = $('tab-gallery');
+  if (tabTally) tabTally.classList.toggle('is-active', tab === 'tally');
+  if (tabGallery) tabGallery.classList.toggle('is-active', tab === 'gallery');
+
+  return updateShareCard();
+}
+
+export { updateShareCard, openShare, closeShare, switchShareTab };

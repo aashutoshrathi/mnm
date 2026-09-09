@@ -14,12 +14,37 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 
+<!--
+  Link previews. og:image has to be an absolute URL - crawlers do not resolve
+  relative paths - so these carry the live origin even though everything else
+  here is relative. Invite links only differ by their #fragment, which crawlers
+  drop, so a shared join link previews with this same card.
+
+  og.png and apple-touch-icon.png are generated: npm run og
+-->
+<link rel="canonical" href="https://mnm.aashutosh.dev/">
+
 <meta property="og:type" content="website">
-<meta property="og:title" content="Marker &amp; Mayhem">
-<meta property="og:description" content="One word, both teams drawing at once, 90 seconds. A Pictionary host that runs the whole game from one phone.">
+<meta property="og:site_name" content="Marker &amp; Mayhem">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://mnm.aashutosh.dev/">
+<meta property="og:title" content="Marker &amp; Mayhem - one word, both teams, 90 seconds">
+<meta property="og:description" content="A Pictionary host that runs the whole game from one phone. It deals the prompt, holds the clock, and keeps the tally - and keeps every team's phone on the same word with no network between them.">
+<meta property="og:image" content="https://mnm.aashutosh.dev/og.png">
+<meta property="og:image:secure_url" content="https://mnm.aashutosh.dev/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Marker &amp; Mayhem: one word, both teams, 90 seconds. A paper prompt card reading 'food truck' sits beside the Red and Blue tally.">
+
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Marker &amp; Mayhem - one word, both teams, 90 seconds">
+<meta name="twitter:description" content="A Pictionary host that runs the whole game from one phone. It deals the prompt, holds the clock, and keeps the tally.">
+<meta name="twitter:image" content="https://mnm.aashutosh.dev/og.png">
+<meta name="twitter:image:alt" content="Marker &amp; Mayhem: one word, both teams, 90 seconds. A paper prompt card reading 'food truck' sits beside the Red and Blue tally.">
 
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 36'%3E%3Crect width='38' height='36' fill='%2312142A'/%3E%3Cg stroke='%23FFD23F' stroke-width='3.2' stroke-linecap='round' fill='none'%3E%3Cpath d='M5 4L5 32'/%3E%3Cpath d='M13.5 4L13.5 32'/%3E%3Cpath d='M22 4L22 32'/%3E%3Cpath d='M30.5 4L30.5 32'/%3E%3Cpath d='M1 30Q17 18 34 6'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

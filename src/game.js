@@ -65,8 +65,9 @@ import {
   pauseClock,
   resumeClock,
   startRound,
+  triggerSynchronizedCountdown,
 } from './clock.js';
-import { openShare, closeShare, updateShareCard } from './share-controller.js';
+import { openShare, closeShare, updateShareCard, switchShareTab } from './share-controller.js';
 
 /* ============================================================== constants */
 
@@ -77,14 +78,14 @@ const MAX_SAVES = 8;
 const TIER_LABEL = { 1: 'warm-up', 2: 'fair fight', 3: 'tricky', 4: 'good luck' };
 
 /** At N seconds left, tick every `gap` ms at `vol`. */
-const TICK_PHASES = [
+export const TICK_PHASES = [
   { from: 20, gap: 1000, vol: 0.045 },
   { from: 10, gap: 500, vol: 0.06 },
   { from: 5, gap: 250, vol: 0.085 },
 ];
 
 const TEAM_COLORS = ['var(--red)', 'var(--blue)'];
-const TEAM_HEX = ['#FF4262', '#3D9BFF'];
+export const TEAM_HEX = ['#FF4262', '#3D9BFF'];
 
 const ANY_THEME = { id: 'any', name: 'Anything goes', icon: '🎯', any: true };
 
@@ -92,7 +93,7 @@ const store = createStore([ADAPTERS.host, webAdapter, sessionAdapter, ADAPTERS.m
 
 /* ================================================================== state */
 
-const S = {
+export const S = {
   /** @type {'solo'|'host'|'guest'} */
   mode: 'solo',
   id: null,
@@ -128,13 +129,13 @@ const S = {
   scanner: null,
 };
 
-const isGuest = () => S.mode === 'guest';
+export const isGuest = () => S.mode === 'guest';
 const isHost = () => S.mode === 'host';
-const isSynced = () => S.mode !== 'solo';
+export const isSynced = () => S.mode !== 'solo';
 
 /* ================================================================ helpers */
 
-const $ = (id) => (typeof document !== 'undefined' && document ? document.getElementById(id) : null);
+export const $ = (id) => (typeof document !== 'undefined' && document ? document.getElementById(id) : null);
 
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -147,7 +148,7 @@ function isGameActive() {
   return !setupActive && !winActive && !joinActive;
 }
 
-function show(id) {
+export function show(id) {
   if (id !== 's-win') {
     stopConfetti();
   }
@@ -162,7 +163,7 @@ function show(id) {
 }
 
 let toastTimer;
-function toast(msg) {
+export function toast(msg) {
   const el = $('toast');
   el.textContent = msg;
   el.classList.add('on');
@@ -260,7 +261,7 @@ function updateAllTeamNamesUI() {
   if (blueBarLabel) blueBarLabel.textContent = t1;
 }
 
-function renderBoard(el) {
+export function renderBoard(el) {
   if (!el) return;
 
   const existing = el.querySelectorAll('.teamrow');
@@ -577,42 +578,7 @@ function startNewGame() {
 
 let hostReadyState = false;
 let guestReadyState = false;
-let countdownTimer = null;
 let guestInLobby = false;
-
-function triggerSynchronizedCountdown(onComplete) {
-  const overlay = $('countdown-overlay');
-  const num = $('cd-num');
-  if (!overlay || !num) {
-    onComplete();
-    return;
-  }
-
-  overlay.hidden = false;
-  let count = 3;
-  num.textContent = count;
-  blip(520, 0.08);
-
-  clearInterval(countdownTimer);
-  countdownTimer = setInterval(() => {
-    if (!countdownTimer) return;
-    count--;
-    if (count > 0) {
-      num.textContent = count;
-      blip(520, 0.08);
-    } else if (count === 0) {
-      num.textContent = 'GO!';
-      blip(1040, 0.15);
-    } else {
-      clearInterval(countdownTimer);
-      countdownTimer = null;
-      overlay.hidden = true;
-      if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
-        onComplete();
-      }
-    }
-  }, 1000);
-}
 
 function startHostSyncedRound() {
   if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
@@ -1237,7 +1203,7 @@ function applyPeek() {
 
 /* ================================================================ results */
 
-function finishRound(winner) {
+export function finishRound(winner) {
   stopClock();
   {
     closeDuoPad();
@@ -1759,20 +1725,8 @@ function wireSettings() {
   const tabTally = $('tab-tally');
   const tabGallery = $('tab-gallery');
   if (tabTally && tabGallery) {
-    tabTally.onclick = () => {
-      if (activeShareTab === 'tally') return;
-      activeShareTab = 'tally';
-      tabTally.classList.add('is-active');
-      tabGallery.classList.remove('is-active');
-      updateShareCard();
-    };
-    tabGallery.onclick = () => {
-      if (activeShareTab === 'gallery') return;
-      activeShareTab = 'gallery';
-      tabGallery.classList.add('is-active');
-      tabTally.classList.remove('is-active');
-      updateShareCard();
-    };
+    tabTally.onclick = () => switchShareTab('tally');
+    tabGallery.onclick = () => switchShareTab('gallery');
   }
 }
 

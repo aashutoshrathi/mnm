@@ -49,6 +49,34 @@ jobs:
       - run: npm ci
       - run: npm run test:dom
 
+  metadata:
+    name: Link-preview metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:meta
+
+  esm-tests:
+    name: "E2E: served ES modules"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Deliberately no build step: this job exercises index.html + src/*.js,
+      # the module graph GitHub Pages actually serves, not the flattened bundle.
+      - run: npm run test:esm
+
   e2e-twoplayer:
     name: "E2E: two-player fixes"
     runs-on: ubuntu-latest
