@@ -9,7 +9,7 @@
  */
 
 import { strict as assert } from 'node:assert';
-import { boot, $, active, click, pickSegment } from './helpers.mjs';
+import { boot, $, click, pickSegment, expectScreen, expectText, expectMatch, waitFor } from './helpers.mjs';
 
 console.log('Testing Two-Player Bug Fixes and Edge Cases...');
 
@@ -19,7 +19,7 @@ $(host, 'n0').value = 'Super Drawers';
 $(host, 'n1').value = 'Mega Sketchers';
 pickSegment(host, 'seg-devices', 'host');
 click(host, 'go');
-assert.equal(active(host), 's-invite');
+await expectScreen(host, 's-invite');
 const inviteUrl = $(host, 'invite-url').textContent;
 
 // 2. Guest joins
@@ -27,8 +27,8 @@ const guest = await boot({ hash: inviteUrl.slice(inviteUrl.indexOf('#')), mockCa
 await new Promise((r) => setTimeout(r, 120));
 
 // Verify team names synced to Guest
-assert.equal($(guest, 'guest-team-name').textContent, 'Mega Sketchers');
-assert.equal($(guest, 'gr-other-name').textContent, 'Super Drawers');
+await expectText(guest, 'guest-team-name', 'Mega Sketchers');
+await expectText(guest, 'gr-other-name', 'Super Drawers');
 console.log('  [PASS] 1. Initial custom team names synced from Host to Guest');
 
 // 3. Guest customizes team name mid-lobby
@@ -38,13 +38,13 @@ click(guest, 'gr-save');
 await new Promise((r) => setTimeout(r, 100));
 
 // Verify Host received updated guest team name
-assert.equal($(host, 'lobby-guest-name').textContent, 'The Neon Inkers');
+await expectText(host, 'lobby-guest-name', 'The Neon Inkers');
 console.log('  [PASS] 2. Guest team rename propagated to Host lobby in real time');
 
 // 4. Host proceeds to handoff
 click(host, 'invite-done');
-assert.equal(active(host), 's-handoff');
-assert.equal($(host, 'hr-guest-name').textContent, 'The Neon Inkers');
+await expectScreen(host, 's-handoff');
+await expectText(host, 'hr-guest-name', 'The Neon Inkers');
 
 // 5. Test "Fix a score" (score adjustment) real-time sync
 click(host, 'adjust-toggle');
@@ -54,8 +54,9 @@ click(host, plusBtn); // Add 2 points to team 0
 await new Promise((r) => setTimeout(r, 100));
 
 // Verify Guest board updated
-const guestScore0 = guest.window.document.querySelector('#board .teamrow:nth-child(1) .tnum')?.textContent;
-assert.equal(guestScore0, '2', 'Guest scoreboard should reflect Host manual score adjustment');
+const guestTnum = () => guest.window.document.querySelector('#board .teamrow:nth-child(1) .tnum')?.textContent;
+await waitFor(() => guestTnum() === '2');
+assert.equal(guestTnum(), '2', 'Guest scoreboard should reflect Host manual score adjustment');
 console.log('  [PASS] 3. Score adjustment (+2 pts) synced to Guest');
 
 // 6. Round 1 Card Pick & Countdown
@@ -69,50 +70,50 @@ assert.equal($(host, 'host-word-text').textContent, $(guest, 'guest-word-text').
 // Ready handshake
 click(guest, 'gr-my-btn');
 await new Promise((r) => setTimeout(r, 100));
-assert.match($(host, 'hr-guest-status').textContent, /Ready/);
+await expectMatch(host, 'hr-guest-status', /Ready/);
 
 // Host triggers countdown
 click(host, 'reveal');
 await new Promise((r) => setTimeout(r, 100));
 
-assert.equal(active(host), 's-draw');
-assert.equal(active(guest), 's-draw');
+await expectScreen(host, 's-draw');
+await expectScreen(guest, 's-draw');
 console.log('  [PASS] 4. Synchronized countdown orchestrated and transition to s-draw verified');
 
 // 7. Host scores Round 1
 click(host, 'got0');
 await new Promise((r) => setTimeout(r, 100));
-assert.equal(active(host), 's-result');
-assert.equal(active(guest), 's-result');
+await expectScreen(host, 's-result');
+await expectScreen(guest, 's-result');
 assert.equal($(guest, 'next').disabled, true, 'Next button on Guest result screen is disabled for host authority');
 console.log('  [PASS] 5. Result screen synchronized with Host authority over Next Round');
 
 // 8. Next Round transition
 click(host, 'next');
 await new Promise((r) => setTimeout(r, 100));
-assert.equal(active(host), 's-handoff');
-assert.equal(active(guest), 's-guest');
+await expectScreen(host, 's-handoff');
+await expectScreen(guest, 's-guest');
 console.log('  [PASS] 6. Round 2 transition clean across both devices');
 
 // 9. Host ends match early and tests Rematch
 click(host, 'wrap-handoff');
 click(host, 'm-yes');
 await new Promise((r) => setTimeout(r, 100));
-assert.equal(active(host), 's-win');
-assert.equal(active(guest), 's-win');
+await expectScreen(host, 's-win');
+await expectScreen(guest, 's-win');
 
 // Host triggers Rematch
 click(host, 'again');
 await new Promise((r) => setTimeout(r, 100));
-assert.equal(active(host), 's-invite');
-assert.equal(active(guest), 's-guest');
+await expectScreen(host, 's-invite');
+await expectScreen(guest, 's-guest');
 console.log('  [PASS] 7. Rematch resets both devices into fresh synchronized game');
 
 // 10. Clean guest reset on Back to Setup
 click(guest, 'guest-leave');
 click(guest, 'm-yes');
 await new Promise((r) => setTimeout(r, 100));
-assert.equal(active(guest), 's-setup');
+await expectScreen(guest, 's-setup');
 console.log('  [PASS] 8. Guest cleanly disconnects and returns to setup');
 
 host.window.close();

@@ -42,6 +42,19 @@
   the stale ready message directly and asserts the host stays on the result
   screen.
 
+- **Both multi-device e2e suites were flaky on CI, on `main`, before this
+  branch.** They asserted cross-device state behind a fixed `setTimeout(100)`,
+  which asserts a latency budget rather than a behaviour: on a loaded runner the
+  BroadcastChannel message lands at 120ms and a test that only ever meant "the
+  guest follows the host" fails. `e2e-twoplayer-fixes.mjs:102` failed as
+  `'s-guest' !== 's-win'` on `main` and again here.
+
+  Cross-device assertions now poll for the condition instead — `expectScreen`,
+  `expectText`, `expectMatch`, `expectSynced` in `test/helpers.mjs`. The happy
+  path is no slower, since a condition that is already true returns on the first
+  check. Verified by delaying `END_GAME` delivery to 400ms, four times the old
+  deadline: both suites pass.
+
 ### Added
 
 - **Link previews.** `og.png`, a 1200×630 social card, plus a full Open Graph

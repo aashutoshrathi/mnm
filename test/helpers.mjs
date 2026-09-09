@@ -291,3 +291,56 @@ export async function bootModules({ hash = '', url = 'https://example.test' } = 
 
   return { dom, restore };
 }
+
+/* ================================================== waiting for propagation */
+
+/**
+ * Poll until `check()` returns true, or give up after `timeout` ms.
+ *
+ * The e2e suites drive two jsdom windows that talk over a BroadcastChannel, and
+ * they used to assert cross-device state behind a fixed `setTimeout(100)`. That
+ * asserts a latency budget, not a behaviour: on a loaded CI runner the message
+ * lands at 120ms and a test that only ever meant "the guest follows the host"
+ * fails. Both e2e suites flaked this way on main - `'s-guest' !== 's-win'` at
+ * e2e-twoplayer-fixes.mjs:102 among others - while passing every local run.
+ *
+ * Polling keeps the assertion and drops the deadline. The happy path is no
+ * slower: a condition that is already true returns on the first check.
+ */
+export async function waitFor(check, { timeout = 3000, interval = 10 } = {}) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    if (check()) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+}
+
+/** Wait for a device to land on a screen, then assert it - so failures still read well. */
+export async function expectScreen(dom, id, msg) {
+  await waitFor(() => active(dom) === id);
+  assert.equal(active(dom), id, msg || `expected screen ${id}`);
+}
+
+/** Wait for an element's text to equal `expected`, then assert it. */
+export async function expectText(dom, id, expected, msg) {
+  await waitFor(() => $(dom, id)?.textContent === expected);
+  assert.equal($(dom, id)?.textContent, expected, msg || `expected #${id} to read "${expected}"`);
+}
+
+/** Wait for an element's text to match `re`, then assert it. */
+export async function expectMatch(dom, id, re, msg) {
+  await waitFor(() => re.test($(dom, id)?.textContent ?? ''));
+  assert.match($(dom, id)?.textContent ?? '', re, msg || `expected #${id} to match ${re}`);
+}
+
+/** Wait until two devices agree on the same element text, then return it. */
+export async function expectSynced(domA, idA, domB, idB, msg) {
+  await waitFor(() => {
+    const a = $(domA, idA)?.textContent;
+    return a && a === $(domB, idB)?.textContent;
+  });
+  const a = $(domA, idA)?.textContent;
+  assert.equal(a, $(domB, idB)?.textContent, msg || `#${idA} and #${idB} should agree across devices`);
+  return a;
+}
