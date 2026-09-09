@@ -10,7 +10,11 @@ One HTML file and a folder of ES modules.
 ```
 npm test          # 49 unit tests (zero dev dependencies)
 npm run test:dom  # 24 integration tests in jsdom
+npm run test:esm  # the app as the browser really loads it: index.html + src/
+npm run test:meta # link-preview tags vs. the images they promise
+npm run test:all  # everything above, plus the multi-device e2e suites
 npm run build     # bundle everything into dist/index.html
+npm run og        # regenerate og.png and apple-touch-icon.png
 npm start         # build + serve on http://localhost:8080
 ```
 
@@ -25,6 +29,8 @@ npm start         # build + serve on http://localhost:8080
 - [Multi-device play](#multi-device-play)
 - [Persistence](#persistence)
 - [Layout](#layout)
+- [Two builds, one invariant](#two-builds-one-invariant)
+- [Link previews](#link-previews)
 - [The QR encoder](#the-qr-encoder)
 - [The prompt bank](#the-prompt-bank)
 - [Browser notes](#browser-notes)
@@ -192,10 +198,15 @@ const store = createStore([ADAPTERS.host, webAdapter, sessionAdapter, ADAPTERS.m
 ## Layout
 
 ```
-index.html              markup only
+index.html              markup only, plus the link-preview metadata
 build.mjs               flattens src/ into a single-file dist/index.html
 sw.js                   service worker: offline shell
 manifest.webmanifest    installable to a home screen
+og.png                  1200x630 social card (generated)
+apple-touch-icon.png    180x180 raster icon (generated)
+tools/
+  og-image.html         draws both of the above on a canvas
+  make-og.mjs           serves that page and writes what it posts back
 src/
   game.js               state machine, screens, wiring (solo | host | guest)
   duo.js                drawing surface: single-team canvas + real-time sideboard
@@ -211,10 +222,81 @@ src/
   storage.js            save adapter chain + memory fallback
   storage-web.js        localStorage/sessionStorage adapters
   styles.css
+  clock.js              round timer, countdown overlay, wake lock
+  share-controller.js   share-card modal and tab switching
+  confetti.js           win-screen burst
+  p2p.js                relay transport for multi-device play
 test/
-  run.mjs               45 unit tests, zero dependencies
-  dom.mjs               20 integration tests in jsdom
+  run.mjs               49 unit tests, zero dependencies
+  dom.mjs               24 integration tests in jsdom
+  e2e-esmodules.mjs     the same app, run as real ES modules (see below)
+  metadata.mjs          link-preview tags vs. the files they promise
 ```
+
+## Two builds, one invariant
+
+The same source ships two ways, and they do not have the same scoping rules:
+
+| | what runs | module scope |
+|---|---|---|
+| the site | `index.html` + `src/*.js` via `<script type="module">` | one scope **per file** |
+| `dist/index.html` | every module concatenated into one IIFE | one scope **for all** |
+
+The bundle is the forgiving one. Flattening seventeen files into a single scope
+means a module can read a name that belongs to a different module and it just
+resolves — so code that is only correct under the bundle looks correct
+everywhere. On the served site the same line throws `ReferenceError`.
+
+That is not hypothetical; it shipped. `clock.js` used `S`, `$`, `show` and
+`finishRound` from `game.js` without importing any of them, and `share-controller.js`
+assigned to `game.js`'s `activeShareTab`. Under the bundle, fine. On the real
+site, picking a word threw `ReferenceError: S is not defined` and the round never
+started — while every test stayed green, because every test booted the bundle.
+
+So the invariant is: **a module may only use what it imports.** Two things hold
+it up.
+
+- Real imports, including the circular `game.js ⇄ clock.js` pair. ES modules
+  handle cycles as long as nothing touches an imported binding at evaluation
+  time, and nothing here does — every reference is inside a function that runs
+  after boot.
+- `npm run test:esm`, which boots `index.html` and the real module graph through
+  Node's own ESM loader, so module boundaries are actually enforced. It walks a
+  full round: theme, word, clock, score, share card. Delete an import and it
+  fails; the bundle-based suites will not notice.
+
+Mutable state cannot cross a module edge, because imported bindings are
+read-only. Where it needs to, the owner exports a function instead — the
+countdown timer moved wholesale into `clock.js`, and the share tab is switched
+through `switchShareTab()` rather than by assignment.
+
+## Link previews
+
+A shared link is often the first thing anyone sees of this, so the metadata is
+treated as a feature rather than boilerplate. `index.html` carries a full Open
+Graph and Twitter card set, and `og.png` is a 1200×630 card drawn on a canvas by
+`tools/og-image.html` — the same approach `share.js` takes, for the same reason:
+no image toolchain, no dependencies.
+
+```bash
+npm run og      # redraws og.png and apple-touch-icon.png
+```
+
+Node cannot rasterise a canvas without a native dependency, so `tools/make-og.mjs`
+serves the generator page and writes whatever the browser posts back. Fonts come
+from Google Fonts, so it needs to be online.
+
+Two details that quietly break previews, both now asserted in
+`npm run test:meta`:
+
+- **`og:image` must be absolute.** Crawlers do not resolve relative paths.
+- **`og:image:width` / `:height` must match the actual PNG.** They are a promise
+  to the crawler, and regenerating the card at a different size without updating
+  the tags is the easy way to break previews with every other test still green.
+  The test reads the dimensions out of the PNG's IHDR chunk and compares.
+
+Invite links differ only by their `#fragment`, which crawlers drop, so a shared
+join link previews with the same card.
 
 ## The QR encoder
 

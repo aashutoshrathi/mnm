@@ -27,6 +27,7 @@ const RECONNECT_MAX_MS = 30000;
 
 let p2pWs = null;
 let p2pChannel = null;
+let p2pSeq = 0;
 let p2pRoomTopic = '';
 let p2pRole = 'host';
 let p2pConnected = false;
@@ -181,6 +182,7 @@ export function sendP2P(type, payload = {}) {
     ...payload,
     from: p2pRole,
     ts: Date.now(),
+    seq: ++p2pSeq,
   };
   const json = JSON.stringify(data);
 
@@ -217,9 +219,40 @@ function flushSendQueue() {
   }
 }
 
+/**
+ * Drop the second copy of a message we have already handled.
+ *
+ * Every message goes out on both transports, and the receiver accepts from
+ * both: once over BroadcastChannel almost immediately, then again over the
+ * public broker after a network round trip. Handling the second copy re-runs
+ * the handler - a repeated WORD_SELECTED bounces the host off the round via
+ * toHandoff(), a repeated DRAWER_READY tries to restart a round that is already
+ * over - at whatever delay a third-party broker happens to add. Sender and
+ * sequence identify a send exactly, so the duplicate is cheap to recognise.
+ */
+const DEDUPE_WINDOW_MS = 30000;
+const seenMessages = new Map();
+
+function alreadyHandled(msg) {
+  const id = msg.seq !== undefined ? `${msg.from}:${msg.seq}` : `${msg.from}:${msg.type}:${msg.ts}`;
+  if (msg.seq === undefined && msg.ts === undefined) return false;
+
+  const now = Date.now();
+  if (seenMessages.has(id)) return true;
+  seenMessages.set(id, now + DEDUPE_WINDOW_MS);
+
+  if (seenMessages.size > 300) {
+    for (const [k, expiry] of seenMessages) {
+      if (expiry <= now) seenMessages.delete(k);
+    }
+  }
+  return false;
+}
+
 function deliverMessage(parsed) {
   const clean = sanitizeMessage(parsed);
-  if (clean) p2pMessageHandler(clean);
+  if (!clean || alreadyHandled(clean)) return;
+  p2pMessageHandler(clean);
 }
 
 function setupWebSocket(clientId) {

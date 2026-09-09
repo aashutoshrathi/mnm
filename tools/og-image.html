@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marker &amp; Mayhem - OG image generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Space+Grotesk:wght@400;500;700&display=swap">
+<style>
+  body { background: #0b0d1c; color: #F7F4EC; font-family: 'Space Grotesk', system-ui, sans-serif; margin: 0; padding: 32px; }
+  canvas { max-width: 100%; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.5); display: block; margin-bottom: 20px; }
+  p { max-width: 1200px; line-height: 1.6; opacity: .7; font-size: 14px; }
+  code { background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!--
+  og-image.html - draws the 1200x630 social card and the 180x180 app icon,
+  by hand, on a canvas.
+
+  Same reasoning as share.js: composing it here rather than screenshotting the
+  app keeps the repo dependency-free and lets the card be laid out for a link
+  preview instead of cropped out of a phone-shaped screen.
+
+  Regenerate with:  npm run og      (see tools/make-og.mjs)
+-->
+
+<canvas id="og" width="1200" height="630"></canvas>
+<canvas id="icon" width="180" height="180"></canvas>
+<p id="status">Served by <code>npm run og</code>, these post themselves back as <code>og.png</code> and <code>apple-touch-icon.png</code>.</p>
+<p id="links"></p>
+
+<script>
+const W = 1200;
+const H = 630;
+
+const INK = '#12142A';
+const PAPER = '#F7F4EC';
+const YELLOW = '#FFD23F';
+const RED = '#FF4262';
+const BLUE = '#3D9BFF';
+const MUTED = 'rgba(247,244,236,0.52)';
+
+const display = (size, weight = 800) =>
+  `${weight} ${size}px "Bricolage Grotesque", system-ui, sans-serif`;
+const body = (size, weight = 500) => `${weight} ${size}px "Space Grotesk", system-ui, sans-serif`;
+
+/** Letter-spaced small caps, which canvas has no native support for. */
+function tracked(ctx, text, x, y, spacing) {
+  let cursor = x;
+  for (const ch of text) {
+    ctx.fillText(ch, cursor, y);
+    cursor += ctx.measureText(ch).width + spacing;
+  }
+  return cursor - spacing - x;
+}
+
+/** The graph-paper ruling the app uses as its ground. */
+function grid(ctx) {
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,.035)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= W; x += 30) {
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, H);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= H; y += 30) {
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(W, y + 0.5);
+    ctx.stroke();
+  }
+}
+
+/** The wordmark: four strokes and the diagonal that closes the group of five. */
+function tallyMark(ctx, x, y, h, color, width) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  const gap = h * 0.3;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x + i * gap, y);
+    ctx.lineTo(x + i * gap, y + h);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(x - gap * 0.42, y + h * 0.94);
+  ctx.quadraticCurveTo(x + gap * 1.5, y + h * 0.5, x + gap * 3.42, y + h * 0.06);
+  ctx.stroke();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/**
+ * The right-hand vignette: the paper card both teams are looking at, with the
+ * two teams' marks under it. It is the whole product in one picture - one word,
+ * two teams, same moment.
+ */
+function vignette(ctx) {
+  const cx = 800;
+  const cy = 196;
+  const cw = 336;
+  const ch = 196;
+
+  ctx.save();
+  ctx.translate(cx + cw / 2, cy + ch / 2);
+  ctx.rotate(-0.03);
+  ctx.translate(-(cx + cw / 2), -(cy + ch / 2));
+
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  roundRect(ctx, cx + 6, cy + 12, cw, ch, 22);
+  ctx.fill();
+
+  ctx.fillStyle = PAPER;
+  roundRect(ctx, cx, cy, cw, ch, 22);
+  ctx.fill();
+
+  // points chip, with the tier label beside it
+  ctx.fillStyle = YELLOW;
+  roundRect(ctx, cx + 28, cy + 26, 56, 56, 16);
+  ctx.fill();
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'center';
+  ctx.font = display(28, 800);
+  ctx.fillText('2', cx + 56, cy + 56);
+  ctx.font = body(10, 700);
+  ctx.fillText('PTS', cx + 56, cy + 72);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(18,20,42,.45)';
+  ctx.font = body(13, 700);
+  tracked(ctx, 'FAIR FIGHT', cx + 100, cy + 50, 1.8);
+  ctx.fillStyle = 'rgba(18,20,42,.35)';
+  ctx.font = body(14, 500);
+  ctx.fillText('Round 3', cx + 100, cy + 74);
+
+  // the word itself, given the room it deserves
+  ctx.fillStyle = INK;
+  ctx.font = display(44, 800);
+  ctx.fillText('food truck', cx + 28, cy + 132);
+
+  ctx.strokeStyle = 'rgba(18,20,42,.14)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 8]);
+  ctx.beginPath();
+  ctx.moveTo(cx + 28, cy + 152);
+  ctx.lineTo(cx + cw - 28, cy + 152);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = 'rgba(18,20,42,.5)';
+  ctx.font = body(15, 500);
+  ctx.fillText('Both teams draw it. Now.', cx + 28, cy + 176);
+  ctx.restore();
+
+  // the two teams, marking up
+  const rows = [
+    { name: 'Red', color: RED, marks: 3, y: 470 },
+    { name: 'Blue', color: BLUE, marks: 2, y: 550 },
+  ];
+  for (const row of rows) {
+    ctx.fillStyle = row.color;
+    ctx.font = display(28, 800);
+    ctx.textAlign = 'left';
+    ctx.fillText(row.name, cx + 4, row.y);
+
+    // upright tally strokes, the same gesture as the in-app scoreboard
+    ctx.strokeStyle = row.color;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < row.marks; i++) {
+      const mx = cx + 116 + i * 20;
+      ctx.beginPath();
+      ctx.moveTo(mx + 3, row.y - 24);
+      ctx.lineTo(mx, row.y + 2);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = row.color;
+    ctx.font = display(44, 800);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(row.marks * 2), cx + cw, row.y + 4);
+  }
+  ctx.textAlign = 'left';
+}
+
+function draw() {
+  const canvas = document.getElementById('og');
+  const ctx = canvas.getContext('2d');
+
+  grid(ctx);
+
+  // logo mark + wordmark
+  tallyMark(ctx, 84, 70, 44, YELLOW, 6);
+  ctx.fillStyle = PAPER;
+  ctx.font = display(30, 800);
+  ctx.fillText('Marker & Mayhem', 186, 104);
+
+  // headline
+  ctx.fillStyle = PAPER;
+  ctx.font = display(88, 800);
+  ctx.fillText('One word.', 84, 250);
+  ctx.fillText('Both teams.', 84, 340);
+  ctx.fillStyle = YELLOW;
+  ctx.fillText('90 seconds.', 84, 430);
+
+  // supporting line
+  ctx.fillStyle = MUTED;
+  ctx.font = body(22, 500);
+  ctx.fillText('A Pictionary host that runs the whole game from one', 84, 492);
+  ctx.fillText('phone. Deals the prompt, holds the clock, keeps the tally.', 84, 524);
+
+  // url
+  ctx.fillStyle = 'rgba(247,244,236,0.34)';
+  ctx.font = body(18, 700);
+  tracked(ctx, 'MNM.AASHUTOSH.DEV', 84, 580, 2.4);
+
+  vignette(ctx);
+
+  window.__ogReady = true;
+  return canvas;
+}
+
+/** The 180x180 raster icon: iOS home screens and link previews cannot use the SVG. */
+function drawIcon() {
+  const canvas = document.getElementById('icon');
+  const ctx = canvas.getContext('2d');
+  const S = 180;
+
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, S, S);
+  tallyMark(ctx, 52, 56, 72, YELLOW, 9);
+
+  return canvas;
+}
+
+const toBlob = (canvas) => new Promise((r) => canvas.toBlob(r, 'image/png'));
+
+/**
+ * Hand each PNG to tools/make-og.mjs if it is the one serving us. Opened any
+ * other way there is nothing listening, so fall back to download links.
+ */
+async function deliver(assets) {
+  const status = document.getElementById('status');
+  const links = document.getElementById('links');
+  const saved = [];
+
+  for (const [name, canvas] of assets) {
+    const blob = await toBlob(canvas);
+    try {
+      const res = await fetch(`/save/${name}`, { method: 'POST', body: blob });
+      if (!res.ok) throw new Error(res.statusText);
+      saved.push(name);
+    } catch (e) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.textContent = `Download ${name}`;
+      a.style.marginRight = '16px';
+      links.appendChild(a);
+    }
+  }
+
+  window.__ogSaved = saved;
+  status.textContent = saved.length === assets.length
+    ? `Saved ${saved.join(' and ')}. You can close this tab.`
+    : 'Nothing listening on /save. Use the links below and drop the files in the repo root.';
+}
+
+async function main() {
+  if (document.fonts && document.fonts.ready) {
+    try {
+      await document.fonts.ready;
+    } catch (e) {
+      /* fall through to system fonts */
+    }
+  }
+  await deliver([
+    ['og.png', draw()],
+    ['apple-touch-icon.png', drawIcon()],
+  ]);
+}
+
+main();
+</script>
+</body>
+</html>

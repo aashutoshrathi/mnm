@@ -1,12 +1,30 @@
 /**
  * clock.js - the game timer, countdown overlay, and wake lock.
  *
- * Extracted from game.js for focus. The build flattens this into the same
- * IIFE scope as game.js, so it shares the flat namespace at runtime.
+ * Extracted from game.js for focus. The import from game.js below is circular
+ * (game.js imports startRound from here), which ES modules handle fine because
+ * nothing in this module touches a game.js binding at evaluation time - every
+ * reference is inside a function that only runs once boot has finished.
+ *
+ * Those imports are not optional decoration. `index.html` loads src/game.js as
+ * a real module, so each file gets its own scope; only the bundle flattens them
+ * into one. Relying on the flat scope meant this module threw
+ * "ReferenceError: S is not defined" on the served site while every test - all
+ * of which boot dist/index.html - stayed green.
  */
 
-import { tock, buzz, buzzer } from './feedback.js';
+import { tock, buzz, buzzer, blip } from './feedback.js';
 import { closeDuoPad, openDuoPad, resetDuoPad } from './duo.js';
+import {
+  $,
+  S,
+  TICK_PHASES,
+  finishRound,
+  isGuest,
+  isSynced,
+  renderBoard,
+  show,
+} from './game.js';
 
 /* =============================================================== wake lock */
 
@@ -41,6 +59,50 @@ function releaseWakeLock() {
       /* no-op */
     }
   }
+}
+
+/* ============================================================== countdown */
+
+/**
+ * The 3-2-1 overlay that fires before a synced round. It lives here rather
+ * than in game.js because stopClock() has to be able to cancel it, and a timer
+ * that two modules can clear is a timer that needs one owner.
+ */
+
+let countdownTimer = null;
+
+function triggerSynchronizedCountdown(onComplete) {
+  const overlay = $('countdown-overlay');
+  const num = $('cd-num');
+  if (!overlay || !num) {
+    onComplete();
+    return;
+  }
+
+  overlay.hidden = false;
+  let count = 3;
+  num.textContent = count;
+  blip(520, 0.08);
+
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    if (!countdownTimer) return;
+    count--;
+    if (count > 0) {
+      num.textContent = count;
+      blip(520, 0.08);
+    } else if (count === 0) {
+      num.textContent = 'GO!';
+      blip(1040, 0.15);
+    } else {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      overlay.hidden = true;
+      if ($('s-draw') && $('s-draw').classList.contains('is-active')) {
+        onComplete();
+      }
+    }
+  }, 1000);
 }
 
 /* ================================================================== clock */
@@ -161,4 +223,15 @@ function startRound(card) {
   }
 }
 
-export { requestWakeLock, releaseWakeLock, formatClock, paintClock, runClock, stopClock, pauseClock, resumeClock, startRound };
+export {
+  requestWakeLock,
+  releaseWakeLock,
+  formatClock,
+  paintClock,
+  runClock,
+  stopClock,
+  pauseClock,
+  resumeClock,
+  startRound,
+  triggerSynchronizedCountdown,
+};
