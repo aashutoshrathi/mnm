@@ -54,6 +54,15 @@ import {
   renderIncomingUndo,
   clearIncomingSideboard,
 } from './duo.js';
+import {
+  initNav,
+  goBack,
+  noteScreen,
+  registerNavLayer,
+  setNavBackHandler,
+  replaceNavUrl,
+  previousScreen,
+} from './nav.js';
 import { burstConfetti, stopConfetti } from './confetti.js';
 import { connectP2P, disconnectP2P, sendP2P } from './p2p.js';
 import {
@@ -155,11 +164,7 @@ export function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('is-active'));
   $(id).classList.add('is-active');
   window.scrollTo(0, 0);
-  if (id !== 's-setup' && id !== 's-join' && id !== 's-win') {
-    try {
-      history.pushState({ inGame: true }, '');
-    } catch (err) {}
-  }
+  noteScreen(id);
 }
 
 let toastTimer;
@@ -1489,14 +1494,73 @@ function endGuestRound() {
 }
 
 async function leaveGame() {
-  const ok = await confirmSheet({
-    title: 'Leave the game?',
-    body: 'This phone stops following along. The code still works if you want to rejoin.',
-    yes: 'Leave',
-    no: 'Stay in',
-  });
-  if (!ok) return;
+  if (!(await confirmLeave())) return;
+  await quitToSetup();
+}
+
+/* ============================================================ back gesture */
+
+/**
+ * Where back goes from each screen.
+ *
+ * Deliberately not a straight reversal of how the player got here. A round
+ * that has already been scored is not somewhere to return to, so s-result
+ * leaves the game rather than walking back into the pick that produced it -
+ * returning to the handoff would let the same round be played and scored
+ * twice. Which screen is the round hub depends on the mode, and a phone can
+ * become a guest mid-session, so it is resolved when the gesture happens
+ * rather than when the screen was shown.
+ *
+ * Returning null means this is the root: back does nothing at all, and in
+ * particular never unloads the app.
+ */
+function backTargetFor(screen) {
+  const hub = isGuest() ? 's-guest' : 's-handoff';
+  switch (screen) {
+    case 's-pick':
+      return 's-theme';
+    case 's-theme':
+    case 's-draw':
+      return hub;
+    case 's-invite':
+      // Reached twice: once when the host opens the room, and again from
+      // "Show the join code again" once play is under way.
+      return previousScreen() === 's-handoff' ? 's-handoff' : 's-setup';
+    case 's-join':
+    case 's-guest':
+    case 's-handoff':
+    case 's-result':
+    case 's-win':
+      return 's-setup';
+    default:
+      return null;
+  }
+}
+
+/** The one prompt shown before anything that abandons a live game. */
+function confirmLeave() {
+  return confirmSheet(
+    isGuest()
+      ? {
+          title: 'Leave the game?',
+          body: 'This phone stops following along. The code still works if you want to rejoin.',
+          yes: 'Leave',
+          no: 'Stay in',
+        }
+      : {
+          title: 'Leave the game?',
+          body: 'Are you sure you want to leave? Active round progress will be lost.',
+          yes: 'Leave game',
+          no: 'Stay in game',
+        }
+  );
+}
+
+/** Tear the session down and land on setup, whichever mode we were in. */
+async function quitToSetup() {
   stopClock();
+  stopScanner();
+  closeDuoPad();
   disconnectP2P();
   S.mode = 'solo';
   S.seed = null;
@@ -1504,6 +1568,76 @@ async function leaveGame() {
   applyMode();
   await renderSaves();
   show('s-setup');
+}
+
+/**
+ * Back, for the screens themselves. Overlays are dismissed by nav.js before
+ * this runs, so by here the player really does mean the screen underneath.
+ */
+async function handleBack(screen) {
+  const target = backTargetFor(screen);
+  if (!target) {
+    toast('Nothing to go back to');
+    return;
+  }
+
+  if (screen === 's-draw' && S.ticker) {
+    const ok = await confirmSheet({
+      title: 'End this round?',
+      body: 'The clock stops and this round is dropped. The scores so far stand.',
+      yes: 'End round',
+      no: 'Keep drawing',
+    });
+    if (!ok) return;
+    stopClock();
+    closeDuoPad();
+  }
+
+  if (target === 's-setup') {
+    if (isGameActive() && !(await confirmLeave())) return;
+    await quitToSetup();
+    return;
+  }
+
+  if (target === 's-theme') {
+    dealThemes();
+    show('s-theme');
+    return;
+  }
+
+  if (target === 's-guest') {
+    toGuestReady();
+    return;
+  }
+
+  toHandoff();
+}
+
+/**
+ * Everything stacked above the screens, in the order back should peel it off.
+ * The confirmation sheet goes first: a back press while it is up means "no".
+ */
+function wireBackNavigation() {
+  const openModal = (id) => ({
+    isOpen: () => !!$(id) && $(id).classList.contains('on'),
+  });
+
+  registerNavLayer({ ...openModal('modal'), close: () => $('m-no').click() });
+  registerNavLayer({ ...openModal('share-modal'), close: closeShare });
+  registerNavLayer({ ...openModal('settings-modal'), close: closeSettings });
+  registerNavLayer({
+    isOpen: () => !!$('duo-pad') && !$('duo-pad').hidden,
+    close: closeDuoPad,
+  });
+  registerNavLayer({ ...openModal('veil'), close: () => $('veil').classList.remove('on') });
+  registerNavLayer({
+    isOpen: () => !!$('scan-wrap') && !$('scan-wrap').hidden,
+    close: stopScanner,
+  });
+
+  setNavBackHandler(handleBack);
+  document.querySelectorAll('.backbtn').forEach((btn) => (btn.onclick = goBack));
+  initNav(document.querySelector('.screen.is-active')?.id);
 }
 
 /** Step the round counter when phones drift out of sync. */
@@ -1608,7 +1742,7 @@ async function joinFromHash() {
   if (!code) return false;
   try {
     const payload = decodeJoinCode(code);
-    history.replaceState(null, '', window.location.pathname + window.location.search);
+    replaceNavUrl(window.location.pathname + window.location.search);
     await enterGuestMode(encodeJoinCode(payload), payload, 1, false);
     return true;
   } catch (err) {
@@ -1911,10 +2045,6 @@ function wireEvents() {
   $('show-invite').onclick = showInvite;
 
   $('open-join').onclick = () => openJoin();
-  $('join-back').onclick = () => {
-    stopScanner();
-    show('s-setup');
-  };
   $('join-go').onclick = () => submitJoin($('join-code').value);
   $('join-code').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitJoin($('join-code').value);
@@ -2131,29 +2261,7 @@ function wireEvents() {
     }
   });
 
-  window.addEventListener('popstate', async () => {
-    if (isGameActive()) {
-      try {
-        history.pushState({ inGame: true }, '');
-      } catch (err) {}
-      const ok = await confirmSheet({
-        title: 'Leave the game?',
-        body: 'Are you sure you want to leave? Active round progress will be lost.',
-        yes: 'Leave game',
-        no: 'Stay in game',
-      });
-      if (ok) {
-        stopClock();
-        disconnectP2P();
-        S.mode = 'solo';
-        S.seed = null;
-        S.code = null;
-        applyMode();
-        await renderSaves();
-        show('s-setup');
-      }
-    }
-  });
+  wireBackNavigation();
 }
 
 /** Offline shell. Only meaningful over http(s); a no-op from the filesystem. */
