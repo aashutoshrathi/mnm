@@ -12,6 +12,7 @@ npm test          # 49 unit tests (zero dev dependencies)
 npm run test:dom  # 24 integration tests in jsdom
 npm run test:esm  # the app as the browser really loads it: index.html + src/
 npm run test:meta # link-preview tags vs. the images they promise
+npm run test:nav  # the back gesture and the back buttons
 npm run test:all  # everything above, plus the multi-device e2e suites
 npm run build     # bundle everything into dist/index.html
 npm run og        # regenerate og.png and apple-touch-icon.png
@@ -27,6 +28,7 @@ npm start         # build + serve on http://localhost:8080
 - [Run it](#run-it)
 - [How a round goes](#how-a-round-goes)
 - [Drawing on the phone itself](#drawing-on-the-phone-itself)
+- [Going back](#going-back)
 - [Multi-device play](#multi-device-play)
 - [Persistence](#persistence)
 - [Layout](#layout)
@@ -113,6 +115,46 @@ screen to turn the phone into an instant digital drawing surface:
   without spoiling the answer.
 - **Screen Wake Lock**: Mobile screens stay awake via the Screen Wake Lock API during
   active rounds so displays never sleep mid-sketch.
+
+## Going back
+
+Installed to a home screen there is no browser chrome, so the OS back gesture
+is the only back a player has - and it used to unload the document, which
+closes the installed app outright, mid-round. The single-document design that
+makes everything else simple is exactly what made that fatal: one document,
+one history entry, and popping it is popping the app.
+
+`nav.js` keeps a spare entry underneath at all times. `arm()` pushes one at
+boot, and every `popstate` re-arms before doing anything else, so a gesture
+always has something to consume that is not the app. One entry off, one entry
+back on: the depth never moves, which is the property the tests assert.
+
+What back *means* is then decided in the app rather than by the browser, and
+every screen but the setup root has a back button that calls the same code.
+Back peels one layer at a time:
+
+1. **An overlay, if one is up** - a modal, the drawing pad, the hidden-screen
+   veil. A back press during a round with the pad open means the pad, not the
+   round underneath it. A back press with a confirmation on screen means *no*.
+2. **Otherwise the screen**, up one level: cards to themes, themes to the
+   handoff, the handoff out to setup.
+
+Two of those steps are not reversals of how the player arrived, deliberately.
+`s-result` leaves the game rather than walking back into the pick that produced
+it - returning to the handoff would let a round that has already been scored be
+played and scored a second time. And which screen counts as the round hub
+depends on the mode, so it is resolved when the gesture happens rather than
+when the screen was shown: a phone that joined a room mid-session goes back to
+`s-guest`, not `s-handoff`.
+
+Anything that would discard live play asks first. Anything that would not -
+stepping back from the cards to the themes, closing an overlay - just happens.
+At the setup root, back does nothing at all.
+
+The previous version did the opposite of all this: `show()` pushed a history
+entry per screen change, so the stack grew all game and back had to be pressed
+once per screen visited before it did anything, and it always dumped the player
+at setup no matter where they were.
 
 ## Multi-device play
 
@@ -225,6 +267,7 @@ src/
   storage-web.js        localStorage/sessionStorage adapters
   styles.css
   clock.js              round timer, countdown overlay, wake lock
+  nav.js                back gesture, back buttons, the history guard
   share-controller.js   share-card modal and tab switching
   confetti.js           win-screen burst
   p2p.js                relay transport for multi-device play
@@ -232,6 +275,7 @@ test/
   run.mjs               49 unit tests, zero dependencies
   dom.mjs               24 integration tests in jsdom
   e2e-esmodules.mjs     the same app, run as real ES modules (see below)
+  e2e-back-navigation.mjs  back, from the gesture and from the buttons
   metadata.mjs          link-preview tags vs. the files they promise
 ```
 
@@ -356,6 +400,10 @@ other tiers, other themes, then generated mashups, which never run out.
   bundle.
 - **Multi-touch drawing**: the drawing pad uses Pointer Events, supported everywhere
   modern. Without canvas 2D the pad degrades to blank-but-harmless.
+- **Back**: intercepted, never allowed to unload the document. See
+  [Going back](#going-back). If a browser refuses `pushState` - some sandboxed
+  and `file://` contexts do - the back *buttons* still work and only the
+  gesture is lost.
 
 ## Licence
 

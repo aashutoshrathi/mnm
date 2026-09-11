@@ -33,6 +33,7 @@ const MODULES = [
   'scan.js',
   'words.js',
   'sync.js',
+  'nav.js',
   'share.js',
   'share-controller.js',
   'confetti.js',
@@ -98,7 +99,26 @@ async function bundleScript() {
   return `(function () {\n'use strict';\n\n${parts.join('\n\n')}\n})();`;
 }
 
+/**
+ * The offline shell, derived from MODULES rather than listed a second time.
+ * It used to be its own hardcoded copy, and a module added to one list and not
+ * the other drops out of the precache silently: everything works until a guest
+ * opens the app with no network, and then the module graph fails to resolve.
+ */
+const SHELL_ASSETS = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icon.svg',
+  './apple-touch-icon.png',
+  './src/styles.css',
+];
+
 function generateServiceWorker(cacheVersion) {
+  const shell = [...SHELL_ASSETS, ...MODULES.map((name) => `./src/${name}`)]
+    .map((url) => `  '${url}',`)
+    .join('\n');
+
   return `/**
  * sw.js - offline shell with automated cache busting.
  * Cache Version: ${cacheVersion}
@@ -107,29 +127,7 @@ function generateServiceWorker(cacheVersion) {
 const CACHE = '${cacheVersion}';
 
 const SHELL = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './icon.svg',
-  './apple-touch-icon.png',
-  './src/styles.css',
-  './src/game.js',
-  './src/rng.js',
-  './src/words.js',
-  './src/tally.js',
-  './src/feedback.js',
-  './src/p2p.js',
-  './src/duo.js',
-  './src/storage.js',
-  './src/storage-web.js',
-  './src/share.js',
-  './src/share-controller.js',
-  './src/sync.js',
-  './src/joincode.js',
-  './src/qr.js',
-  './src/scan.js',
-  './src/confetti.js',
-  './src/clock.js',
+${shell}
 ];
 
 self.addEventListener('install', (event) => {

@@ -1,9 +1,9 @@
 /**
  * sw.js - offline shell with automated cache busting.
- * Cache Version: marker-mayhem-v-7749c766f1
+ * Cache Version: marker-mayhem-v-929fd3f22f
  */
 
-const CACHE = 'marker-mayhem-v-7749c766f1';
+const CACHE = 'marker-mayhem-v-929fd3f22f';
 
 const SHELL = [
   './',
@@ -12,23 +12,24 @@ const SHELL = [
   './icon.svg',
   './apple-touch-icon.png',
   './src/styles.css',
-  './src/game.js',
   './src/rng.js',
-  './src/words.js',
-  './src/tally.js',
   './src/feedback.js',
   './src/p2p.js',
   './src/duo.js',
+  './src/tally.js',
   './src/storage.js',
   './src/storage-web.js',
-  './src/share.js',
-  './src/share-controller.js',
-  './src/sync.js',
   './src/joincode.js',
   './src/qr.js',
   './src/scan.js',
+  './src/words.js',
+  './src/sync.js',
+  './src/nav.js',
+  './src/share.js',
+  './src/share-controller.js',
   './src/confetti.js',
   './src/clock.js',
+  './src/game.js',
 ];
 
 self.addEventListener('install', (event) => {
