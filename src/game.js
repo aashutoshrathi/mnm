@@ -535,6 +535,11 @@ function initSetup() {
 }
 
 function startNewGame() {
+  guestInLobby = false;
+  hostReadyState = false;
+  guestReadyState = false;
+  resetDuoPad();
+
   S.teams[0].name = $('n0').value.trim() || 'Red';
   S.teams[1].name = $('n1').value.trim() || 'Blue';
   S.teams.forEach((t) => Object.assign(t, { score: 0, drawn: 0 }));
@@ -666,6 +671,8 @@ function handleP2PMessage(msg) {
           team1Name: S.teams[1].name,
           team0Score: S.teams[0].score,
           team1Score: S.teams[1].score,
+          endsAt: S.ticker ? S.endsAt : 0,
+          strokes: S.ticker ? getCurrentStrokes() : [],
         });
       }
       break;
@@ -682,6 +689,8 @@ function handleP2PMessage(msg) {
           team1Name: S.teams[1].name,
           team0Score: S.teams[0].score,
           team1Score: S.teams[1].score,
+          endsAt: S.ticker ? S.endsAt : 0,
+          strokes: S.ticker ? getCurrentStrokes() : [],
         });
       }
       break;
@@ -716,7 +725,17 @@ function handleP2PMessage(msg) {
         const isDrawing = $('s-draw').classList.contains('is-active');
         const isTheme = $('s-theme').classList.contains('is-active');
         const isPick = $('s-pick').classList.contains('is-active');
-        if (!isDrawing && !isTheme && !isPick) {
+
+        if (msg.endsAt && msg.endsAt > Date.now()) {
+          S.endsAt = msg.endsAt;
+          if (!isDrawing) {
+            startGuestSyncedRound();
+          }
+          if (msg.strokes && msg.strokes.length) {
+            const pts = msg.strokes.flatMap(s => s.segments.map(seg => ({a: seg.aNorm, b: seg.bNorm, c: s.color, w: s.width, t: s.tool, id: s.id})));
+            renderIncomingBatch('red', pts);
+          }
+        } else if (!isDrawing && !isTheme && !isPick) {
           toGuestReady();
         }
       }
@@ -853,6 +872,7 @@ function handleP2PMessage(msg) {
     case 'SCORE':
       if (isGuest()) {
         stopClock();
+        const strokes = getCurrentStrokes();
         closeDuoPad();
         resetDuoPad();
         if (msg.team0Score !== undefined) S.teams[0].score = msg.team0Score;
@@ -860,7 +880,6 @@ function handleP2PMessage(msg) {
         if (Array.isArray(msg.history)) {
           S.history = msg.history;
         } else if (S.card) {
-          const strokes = getCurrentStrokes();
           S.history.push({ r: msg.round, w: S.card.word, t: S.theme?.name || '', win: msg.winner, p: msg.pts, strokes });
         }
         if (S.rounds && S.round > S.rounds) {
@@ -1217,6 +1236,7 @@ function applyPeek() {
 
 export function finishRound(winner) {
   stopClock();
+  const strokes = getCurrentStrokes();
   {
     closeDuoPad();
   }
@@ -1239,7 +1259,6 @@ export function finishRound(winner) {
     $('verdict').style.color = S.teams[winner].color;
   }
 
-  const strokes = getCurrentStrokes();
   S.history.push({ r: S.round, w: word, t: themeName, win: winner, p: pts, strokes });
   $('res-word').textContent = word;
   renderBoard($('board2'));
