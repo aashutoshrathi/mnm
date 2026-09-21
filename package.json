@@ -18,7 +18,7 @@
     "test:meta": "node test/metadata.mjs",
     "test:dedupe": "node build.mjs && node test/e2e-p2p-dedupe.mjs",
     "test:nav": "node build.mjs && node test/e2e-back-navigation.mjs",
-    "test:all": "npm run test && npm run test:meta && npm run test:dom && node test/e2e-esmodules.mjs && node test/e2e-p2p-dedupe.mjs && node test/e2e-multidevice.mjs && node test/e2e-creative-match.mjs && node test/e2e-twoplayer-fixes.mjs && node test/e2e-user-requests.mjs && node test/e2e-back-navigation.mjs",
+    "test:all": "npm run test && npm run test:meta && npm run test:dom && node test/e2e-esmodules.mjs && node test/e2e-p2p-dedupe.mjs && node test/e2e-multidevice.mjs && node test/e2e-creative-match.mjs && node test/e2e-twoplayer-fixes.mjs && node test/e2e-user-requests.mjs && node test/e2e-back-navigation.mjs && node test/e2e-game-restart.mjs",
     "lint": "eslint src/ test/ build.mjs",
     "format": "prettier --write src/ test/ build.mjs *.json",
     "og": "node tools/make-og.mjs",
