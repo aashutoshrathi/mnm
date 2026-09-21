@@ -133,6 +133,20 @@ jobs:
       - run: npm run build
       - run: node test/e2e-user-requests.mjs
 
+  e2e-back-navigation:
+    name: "E2E: back navigation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/e2e-back-navigation.mjs
+
   build:
     name: Build
     runs-on: ubuntu-latest
