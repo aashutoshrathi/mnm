@@ -901,6 +901,47 @@ export function wireDuoPad() {
       padLayout();
     }
   });
+
+  const sideboard = padEl('pad-sideboard');
+  if (sideboard) {
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let initialLeft = 0, initialTop = 0;
+
+    sideboard.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = sideboard.getBoundingClientRect();
+      const parentRect = sideboard.parentElement.getBoundingClientRect();
+      initialLeft = rect.left - parentRect.left;
+      initialTop = rect.top - parentRect.top;
+      sideboard.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+
+    sideboard.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      sideboard.style.left = `${initialLeft + dx}px`;
+      sideboard.style.top = `${initialTop + dy}px`;
+      sideboard.style.right = 'auto';
+      sideboard.style.bottom = 'auto';
+      e.stopPropagation();
+    });
+
+    sideboard.addEventListener('pointerup', (e) => {
+      isDragging = false;
+      sideboard.releasePointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+
+    sideboard.addEventListener('pointercancel', (e) => {
+      isDragging = false;
+      e.stopPropagation();
+    });
+  }
 }
 
 
