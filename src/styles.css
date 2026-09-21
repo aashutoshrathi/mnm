@@ -631,7 +631,9 @@ body:not(.mode-synced) #show-invite { display: none; }
   flex-direction: column;
   gap: 6px;
   z-index: 10;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
 }
 .sideboard[hidden] { display: none; }
 
