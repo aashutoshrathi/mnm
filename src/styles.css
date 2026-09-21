@@ -299,6 +299,17 @@ input[type=text]:focus { border-color: rgba(247,244,236,.4); outline: none; }
 
 .topbar { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; margin-bottom: 20px; }
+/* The arrow and the screen title read as one unit; the auto margin pins
+   whatever follows to the right edge, the way space-between did before. */
+.topbar > .backbtn + .eyebrow { margin-right: auto; }
+
+.backbtn { display: inline-flex; align-items: center; justify-content: center;
+  flex: none; width: 34px; height: 34px; margin-left: -4px;
+  border-radius: 10px; color: rgba(247,244,236,.55);
+  background: rgba(247,244,236,.06); border: 1px solid rgba(247,244,236,.1);
+  transition: background .15s ease, color .15s ease, transform .12s ease; }
+.backbtn:hover { background: rgba(247,244,236,.14); color: var(--paper); }
+.backbtn:active { transform: scale(.92); }
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .mt { margin-top: auto; padding-top: 22px; }
 
